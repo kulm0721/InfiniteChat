@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: UserService
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/InitProject?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: root
+    password: [REDACTED]
+  data:
+    redis:
+      database: 2
+      host: localhost
+      port: 59000
+      password: e65K4t8w2
+      timeout: 30000
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: 1812872969@qq.com
+    password: fcmfmmbiwefzecgc
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: isDelete
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+
+server:
+  port: 8101
