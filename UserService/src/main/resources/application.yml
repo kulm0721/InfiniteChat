@@ -35,4 +35,4 @@ mybatis-plus:
 
 
 server:
-  port: 8101
+  port: 8104
