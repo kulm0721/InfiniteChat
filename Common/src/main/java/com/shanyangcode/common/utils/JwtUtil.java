@@ -1,12 +1,11 @@
-package com.shanyangcode.userservice.utils;
+package com.shanyangcode.common.utils;
 
 import java.security.Key;
-import java.time.Duration;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 
-import com.shanyangcode.userservice.constant.UserConstant;
+import com.shanyangcode.common.constant.CommonConstant;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
@@ -41,7 +40,7 @@ public final class JwtUtil {
      * 获取签名密钥（从常量类读取，避免硬编码）
      */
     public static Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(UserConstant.TOKEN_SECRET_KEY);
+        byte[] keyBytes = Decoders.BASE64.decode(CommonConstant.TOKEN_SECRET_KEY);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
