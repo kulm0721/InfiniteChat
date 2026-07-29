@@ -14,6 +14,7 @@ import io.netty.util.NettyRuntime;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 @Configuration
 public class NettyService {
@@ -23,6 +24,12 @@ public class NettyService {
     private final NioEventLoopGroup bossGroup = new NioEventLoopGroup(1);
 
     private final NioEventLoopGroup workerGroup = new NioEventLoopGroup(NettyRuntime.availableProcessors() * 2);
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+    public NettyService(StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate = stringRedisTemplate;
+    }
 
     @PostConstruct
     public void start() throws InterruptedException {
@@ -39,6 +46,7 @@ public class NettyService {
                         ChannelPipeline channelPipeline=socketChannel.pipeline();
                         channelPipeline.addLast(new HttpServerCodec());
                         channelPipeline.addLast(new HttpObjectAggregator(65536));
+                        channelPipeline.addLast(new WebSocketAuthHeader(stringRedisTemplate));
                         channelPipeline.addLast(new WebSocketServerProtocolHandler("/ws/netty"));
                         channelPipeline.addLast(new WebSocketHandler());
                     }
