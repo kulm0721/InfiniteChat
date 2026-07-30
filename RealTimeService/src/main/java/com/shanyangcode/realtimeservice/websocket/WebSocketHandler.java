@@ -4,7 +4,7 @@ package com.shanyangcode.realtimeservice.websocket;
 import cn.hutool.json.JSONUtil;
 import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.model.dto.MessageRequest;
-import com.shanyangcode.realtimeservice.constants.WebSocketConstant;
+import com.shanyangcode.realtimeservice.constant.WebSocketConstant;
 import com.shanyangcode.realtimeservice.utils.SnowflakeDynamicUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;

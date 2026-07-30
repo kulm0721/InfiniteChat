@@ -1,4 +1,4 @@
-package com.shanyangcode.realtimeservice.constants;
+package com.shanyangcode.realtimeservice.constant;
 
 public class WebSocketConstant {
 
