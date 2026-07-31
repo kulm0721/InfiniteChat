@@ -3,16 +3,30 @@ spring:
     name: OfflineDataService
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:49152/InitProject?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:49152/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: [REDACTED]
   data:
     redis:
       database: 2
-      host: IP
-      port: 59000
-      password: [REDACTED]
+      host: localhost
+      port: 6379
       timeout: 30000
+  kafka:
+    bootstrap-servers: localhost:9092  # Kafka 服务地址，多个用逗号分隔
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: infinite-chat-push-group                # 消费者组 ID
+      auto-offset-reset: earliest       # earliest / latest / none
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: true          # 是否自动提交 offset
+      auto-commit-interval: 1000        # 自动提交间隔（毫秒）
+
 
 server:
   port: 8101

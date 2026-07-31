@@ -3,15 +3,14 @@ spring:
     name: UserService
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/InitProject?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: [REDACTED]
   data:
     redis:
       database: 2
       host: localhost
-      port: 59000
-      password: e65K4t8w2
+      port: 6379
       timeout: 30000
   mail:
     host: smtp.qq.com

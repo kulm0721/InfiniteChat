@@ -3,15 +3,14 @@ spring:
     name: RedPacketService
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:49152/InitProject?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:49152/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: [REDACTED]
   data:
     redis:
       database: 2
-      host: IP
-      port: 59000
-      password: [REDACTED]
+      host: localhost
+      port: 6379
       timeout: 30000
 
 server:
