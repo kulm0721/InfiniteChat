@@ -11,7 +11,44 @@ spring:
       database: 2
       host: localhost
       port: 6379
+      password: [REDACTED]
       timeout: 30000
+  main:
+    web-application-type: reactive
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:18375
+    gateway:
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:10010"
+            allowedMethods:
+              - "GET"
+              - "POST"
+              - "PUT"
+              - "DELETE"
+              - "PATCH"
+              - "OPTIONS"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 36000
+      routes:
+        - id: UserService
+          uri: lb://UserService
+          predicates:
+            - Path=/api/user/**
+        - id: OfflineDataService
+          uri: lb://OfflineDataService
+          predicates:
+            - Path=/api/offline/**
+        - id: AiService
+          uri: lb://AiService
+          predicates:
+            - Path=/api/ai/**
 
 server:
   port: 10010

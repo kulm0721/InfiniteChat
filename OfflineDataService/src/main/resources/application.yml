@@ -11,6 +11,7 @@ spring:
       database: 2
       host: localhost
       port: 6379
+      password: [REDACTED]
       timeout: 30000
   kafka:
     bootstrap-servers: localhost:9092  # Kafka 服务地址，多个用逗号分隔
@@ -26,7 +27,10 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       enable-auto-commit: true          # 是否自动提交 offset
       auto-commit-interval: 1000        # 自动提交间隔（毫秒）
-
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:18375
 
 server:
   port: 8101

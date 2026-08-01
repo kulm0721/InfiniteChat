@@ -2,11 +2,11 @@ package com.shanyangcode.userservice.controller;
 
 
 import com.shanyangcode.common.utils.JwtUtil;
-import com.shanyangcode.userservice.common.BaseResponse;
-import com.shanyangcode.userservice.common.ErrorCode;
-import com.shanyangcode.userservice.common.ResultUtils;
+import com.shanyangcode.common.common.BaseResponse;
+import com.shanyangcode.common.common.ErrorCode;
+import com.shanyangcode.common.common.ResultUtils;
 import com.shanyangcode.userservice.constant.UserConstant;
-import com.shanyangcode.userservice.exception.ThrowUtils;
+import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
 import com.shanyangcode.userservice.model.dto.UserRegisterRequest;

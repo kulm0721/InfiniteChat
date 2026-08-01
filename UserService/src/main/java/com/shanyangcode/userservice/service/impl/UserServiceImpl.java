@@ -7,9 +7,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.shanyangcode.common.utils.JwtUtil;
 import com.shanyangcode.common.constant.CommonConstant;
-import com.shanyangcode.userservice.common.ErrorCode;
+import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.userservice.constant.UserConstant;
-import com.shanyangcode.userservice.exception.ThrowUtils;
+import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.userservice.mapper.UserMapper;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
@@ -69,7 +69,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
 
         // 验证密码是否相同
-        ThrowUtils.throwIf(!userRegisterRequest.getPassword().equals(userRegisterRequest.getConfirmPassword()),ErrorCode.LOGIN_PASSWORD_ERROR);
+        ThrowUtils.throwIf(!userRegisterRequest.getPassword().equals(userRegisterRequest.getConfirmPassword()),ErrorCode.LOGIN_ERROR);
 
 
         String password = userRegisterRequest.getPassword();

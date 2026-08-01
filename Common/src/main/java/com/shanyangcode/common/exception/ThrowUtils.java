@@ -1,6 +1,6 @@
-package com.shanyangcode.userservice.exception;
+package com.shanyangcode.common.exception;
 
-import com.shanyangcode.userservice.common.ErrorCode;
+import com.shanyangcode.common.common.ErrorCode;
 
 /**
  * 抛异常工具类

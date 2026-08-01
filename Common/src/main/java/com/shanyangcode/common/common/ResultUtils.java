@@ -1,4 +1,4 @@
-package com.shanyangcode.userservice.common;
+package com.shanyangcode.common.common;
 
 /**
  * 返回工具类
