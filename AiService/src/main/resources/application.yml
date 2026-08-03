@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: AiService
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: [REDACTED]
+      ttl: 3600
+      timeout: 30000
+  datasource:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:49152/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+      username: root
+      password: [REDACTED]
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: 1774606223@qq.com
+    password: [REDACTED]
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:18375
+
+
+server:
+  port: 8105
+
+
+logging:
+  level:
+    dev.langchain4j.mcp: ERROR
+
+
+
+langchain4j:
+  community:
+    dashscope:
+      chat-model:
+        model-name: qwen-max
+        api-key: [REDACTED]
+      streaming-chat-model:
+        model-name: qwen-max
+        api-key: [REDACTED]
+      embedding-model:
+        model-name: qwen3.7-text-embedding
+        api-key: [REDACTED]
+
+bigmodel:
+  api-key: [REDACTED]
+
+rag:
+  docs-path: src/main/resources/docs
+
+pgvector:
+  database: dp
+  host: localhost
+  port : 54328
+  user: root
+  password: [REDACTED]
+  table: dp_embedding
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
