@@ -10,6 +10,7 @@ import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
+import com.shanyangcode.userservice.loadbalancer.NettyServiceLocator;
 import com.shanyangcode.userservice.mapper.UserMapper;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
@@ -37,6 +38,9 @@ import java.util.concurrent.TimeUnit;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     implements UserService {
 
+
+    @Resource
+    private NettyServiceLocator nettyServiceLocator;
 
     @Resource
     private EmailUtil emailUtil;
@@ -148,6 +152,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         loginAndRegisterResponse.setRefreshToken(refreshToken);
         stringRedisTemplate.opsForValue().set(CommonConstant.ACCESS_TOKEN_PREFIX + userId, accessToken, CommonConstant.ACCESS_TOKEN_EXPIRE_TIME, CommonConstant.ACCESS_TOKEN_UNIT);
         stringRedisTemplate.opsForValue().set(CommonConstant.REFRESH_TOKEN_PREFIX + userId, refreshToken, CommonConstant.REFRESH_TOKEN_EXPIRE_TIME, CommonConstant.REFRESH_TOKEN_UNIT);
+        String nettyUri= nettyServiceLocator.getServiceInstance(loginAndRegisterResponse.getUserId().toString());
+        loginAndRegisterResponse.setNettyUri(nettyUri);
         return loginAndRegisterResponse;
     }
 
@@ -182,6 +188,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         stringRedisTemplate.opsForValue().set(CommonConstant.ACCESS_TOKEN_PREFIX + userId, newAccessToken, CommonConstant.ACCESS_TOKEN_EXPIRE_TIME, CommonConstant.ACCESS_TOKEN_UNIT);
         stringRedisTemplate.opsForValue().set(CommonConstant.REFRESH_TOKEN_PREFIX + userId, newRefreshToken, CommonConstant.REFRESH_TOKEN_EXPIRE_TIME, CommonConstant.REFRESH_TOKEN_UNIT);
         return TokenResponse.builder().accessToken(newAccessToken).refreshToken(newRefreshToken).build();
+    }
+
+    @Override
+    public String refreshUri(Long userId){
+        return nettyServiceLocator.getServiceInstance(String.valueOf(userId));
     }
 }
 

@@ -1,12 +1,12 @@
 package com.shanyangcode.userservice.controller;
 
 
-import com.shanyangcode.common.utils.JwtUtil;
 import com.shanyangcode.common.common.BaseResponse;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.common.ResultUtils;
-import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
+import com.shanyangcode.common.utils.JwtUtil;
+import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
 import com.shanyangcode.userservice.model.dto.UserRegisterRequest;
@@ -32,7 +32,7 @@ public class UserController {
     private UserService userService;
 
     @GetMapping("/sendCaptcha")
-    public BaseResponse<String> sendCaptcha(@NotBlank(message = "邮箱不能为空") @Email(message = "邮箱格式不正确")  @RequestParam String targetEmail) {
+    public BaseResponse<String> sendCaptcha(@NotBlank(message = "邮箱不能为空") @Email(message = "邮箱格式不正确") @RequestParam String targetEmail) {
 
         userService.sendCaptcha(targetEmail);
         return ResultUtils.success(UserConstant.SEND_EMAIL_SUCCESS);
@@ -57,7 +57,6 @@ public class UserController {
     }
 
 
-
     @GetMapping("/logout")
     public BaseResponse<Boolean> logout(HttpServletRequest request) {
         String accessToken = request.getHeader("Access-Token");
@@ -72,6 +71,11 @@ public class UserController {
         String refreshToken = request.getHeader("Refresh-Token");
         ThrowUtils.throwIf(StringUtils.isBlank(refreshToken), ErrorCode.PARAMS_ERROR);
         return ResultUtils.success(userService.refreshToken(refreshToken));
+    }
+
+    @GetMapping("/refresh/uri")
+    public BaseResponse<String> refreshUri(@RequestParam Long userId) {
+        return ResultUtils.success(userService.refreshUri(userId));
     }
 
 

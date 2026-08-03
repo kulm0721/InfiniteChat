@@ -22,4 +22,8 @@ public class CommonConstant {
     public static final String KAFKA_MESSAGE_TOPIC_PUSH = "message-topic";
 
     public static final String REDIS_NETTY_URI = "nettyUri";
+
+    public static final String DISCOVERY_CLIENT_NAME = "RealTimeService";
+
+    public static final String NETTY_SERVICE_URI = "/ws/netty";
 }

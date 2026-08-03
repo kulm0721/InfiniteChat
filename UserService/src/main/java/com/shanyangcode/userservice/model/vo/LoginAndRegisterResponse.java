@@ -20,4 +20,6 @@ public class LoginAndRegisterResponse {
     private String accessToken;
 
     private String refreshToken;
+
+    private String nettyUri;
 }

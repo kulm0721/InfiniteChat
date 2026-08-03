@@ -27,4 +27,6 @@ public interface UserService extends IService<User> {
 
 
     TokenResponse refreshToken(String refreshToken);
+
+    String refreshUri(Long userId);
 }
