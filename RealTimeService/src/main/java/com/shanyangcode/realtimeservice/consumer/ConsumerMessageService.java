@@ -5,18 +5,25 @@ import cn.hutool.json.JSONUtil;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.common.model.vo.MessageResponse;
 import com.shanyangcode.common.utils.FormatDateUtil;
+import com.shanyangcode.realtimeservice.client.UserServiceClient;
 import com.shanyangcode.realtimeservice.constant.SessionTypeConstant;
 import com.shanyangcode.realtimeservice.websocket.ChannelManager;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @Slf4j
 public class ConsumerMessageService {
+
+    @Resource
+    private UserServiceClient userServiceClient;
 
     @KafkaListener(topics = "message-topic", groupId = "infinite-chat-push-group-0")
     public void consume(String message) {
@@ -37,7 +44,21 @@ public class ConsumerMessageService {
     }
 
     public void groupMessage(MessageRequest messageRequest) {
-        //todo
+        List<Long> receiveUserIds;
+        try {
+            receiveUserIds = userServiceClient.getUserIdBySessionId(messageRequest.getSessionId());
+        } catch (Exception e) {
+            log.error("获取会话成员失败, sessionId={}", messageRequest.getSessionId(), e);
+            return;
+        }
+        if (receiveUserIds == null || receiveUserIds.isEmpty()) {
+            log.info("会话无成员, sessionId={}", messageRequest.getSessionId());
+            return;
+        }
+        MessageResponse messageResponse = createMessageResponse(messageRequest);
+        for (Long receiveUserId : receiveUserIds) {
+            pushMessageToUser(messageResponse, receiveUserId);
+        }
     }
 
     public MessageResponse createMessageResponse(MessageRequest messageRequest) {

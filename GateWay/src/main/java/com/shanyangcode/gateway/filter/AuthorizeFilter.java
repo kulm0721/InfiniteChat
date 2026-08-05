@@ -25,7 +25,8 @@ import java.util.List;
 @Slf4j
 @Component
 public class AuthorizeFilter implements GlobalFilter, Ordered {
-    private static final List<String> EXCLUDE_PATHS = Arrays.asList("/api/user/login/code",
+    private static final List<String> EXCLUDE_PATHS = Arrays.asList(
+            "/api/user/login/code",
             "/api/user/register",
             "/api/user/sendCaptcha",
             "/api/user/login/password",

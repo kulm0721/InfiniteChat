@@ -1,12 +1,14 @@
 package com.shanyangcode.userservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.shanyangcode.userservice.model.dto.UpdateAvatarRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
 import com.shanyangcode.userservice.model.dto.UserRegisterRequest;
 import com.shanyangcode.userservice.model.entity.User;
 import com.shanyangcode.userservice.model.vo.LoginAndRegisterResponse;
 import com.shanyangcode.userservice.model.vo.TokenResponse;
+import com.shanyangcode.userservice.model.vo.UploadUrlResponse;
 
 
 public interface UserService extends IService<User> {
@@ -20,7 +22,6 @@ public interface UserService extends IService<User> {
     LoginAndRegisterResponse loginPassword(UserLoginPasswordRequest userLoginPasswordRequest);
 
 
-
     LoginAndRegisterResponse loginCode(UserLoginCodeRequest userLoginCodeRequest);
 
     boolean logout(String userId);
@@ -29,4 +30,8 @@ public interface UserService extends IService<User> {
     TokenResponse refreshToken(String refreshToken);
 
     String refreshUri(Long userId);
+
+    UploadUrlResponse uploadUrl(String fileName);
+
+    Boolean updateAvatar(UpdateAvatarRequest updateAvatarRequest);
 }

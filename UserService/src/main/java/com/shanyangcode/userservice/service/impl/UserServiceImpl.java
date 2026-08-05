@@ -5,22 +5,24 @@ import cn.hutool.core.lang.Snowflake;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.shanyangcode.common.utils.JwtUtil;
-import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.common.ErrorCode;
-import com.shanyangcode.userservice.constant.UserConstant;
+import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
+import com.shanyangcode.common.utils.JwtUtil;
+import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.userservice.loadbalancer.NettyServiceLocator;
 import com.shanyangcode.userservice.mapper.UserMapper;
+import com.shanyangcode.userservice.model.dto.UpdateAvatarRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
 import com.shanyangcode.userservice.model.dto.UserRegisterRequest;
 import com.shanyangcode.userservice.model.entity.User;
 import com.shanyangcode.userservice.model.vo.LoginAndRegisterResponse;
 import com.shanyangcode.userservice.model.vo.TokenResponse;
+import com.shanyangcode.userservice.model.vo.UploadUrlResponse;
 import com.shanyangcode.userservice.service.UserService;
-
 import com.shanyangcode.userservice.utils.EmailUtil;
+import com.shanyangcode.userservice.utils.OssUtils;
 import com.shanyangcode.userservice.utils.RandomCodeUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.annotation.Resource;
@@ -36,7 +38,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 @Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
-    implements UserService {
+        implements UserService {
 
 
     @Resource
@@ -48,6 +50,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private OssUtils ossUtils;
 
     @Override
     public void sendCaptcha(String targetEmail) {
@@ -66,14 +70,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String code = userRegisterRequest.getCode();
         // 验证验证码是否正确
         String redisCode = stringRedisTemplate.opsForValue().get(email);
-        ThrowUtils.throwIf(StringUtils.isBlank(redisCode) || !code.equals(redisCode),ErrorCode.LOGIN_ERROR_CODE);
+        ThrowUtils.throwIf(StringUtils.isBlank(redisCode) || !code.equals(redisCode), ErrorCode.LOGIN_ERROR_CODE);
 
         // 验证用户账号是否已经存在
         ThrowUtils.throwIf(getUser(email) != null, ErrorCode.USER_ALREADY_EXISTS);
 
 
         // 验证密码是否相同
-        ThrowUtils.throwIf(!userRegisterRequest.getPassword().equals(userRegisterRequest.getConfirmPassword()),ErrorCode.LOGIN_ERROR);
+        ThrowUtils.throwIf(!userRegisterRequest.getPassword().equals(userRegisterRequest.getConfirmPassword()), ErrorCode.LOGIN_ERROR);
 
 
         String password = userRegisterRequest.getPassword();
@@ -121,7 +125,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String code = userLoginCodeRequest.getCode();
 
         String redisCode = stringRedisTemplate.opsForValue().get(email);
-        ThrowUtils.throwIf(StringUtils.isBlank(redisCode) || !code.equals(redisCode),ErrorCode.LOGIN_ERROR_CODE);
+        ThrowUtils.throwIf(StringUtils.isBlank(redisCode) || !code.equals(redisCode), ErrorCode.LOGIN_ERROR_CODE);
 
         // 删除 redis 保存的验证码
         stringRedisTemplate.delete(email);
@@ -135,14 +139,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return createJwt(loginAndRegisterResponse);
     }
 
-
     public User getUser(String email) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("email", email);
         return this.getOne(queryWrapper);
     }
-
-
 
     public LoginAndRegisterResponse createJwt(LoginAndRegisterResponse loginAndRegisterResponse) {
         String userId = loginAndRegisterResponse.getUserId().toString();
@@ -152,7 +153,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         loginAndRegisterResponse.setRefreshToken(refreshToken);
         stringRedisTemplate.opsForValue().set(CommonConstant.ACCESS_TOKEN_PREFIX + userId, accessToken, CommonConstant.ACCESS_TOKEN_EXPIRE_TIME, CommonConstant.ACCESS_TOKEN_UNIT);
         stringRedisTemplate.opsForValue().set(CommonConstant.REFRESH_TOKEN_PREFIX + userId, refreshToken, CommonConstant.REFRESH_TOKEN_EXPIRE_TIME, CommonConstant.REFRESH_TOKEN_UNIT);
-        String nettyUri= nettyServiceLocator.getServiceInstance(loginAndRegisterResponse.getUserId().toString());
+        String nettyUri = nettyServiceLocator.getServiceInstance(loginAndRegisterResponse.getUserId().toString());
         loginAndRegisterResponse.setNettyUri(nettyUri);
         return loginAndRegisterResponse;
     }
@@ -163,7 +164,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         stringRedisTemplate.delete(CommonConstant.REFRESH_TOKEN_PREFIX + userId);
         return true;
     }
-
 
     @Override
     public TokenResponse refreshToken(String refreshToken) {
@@ -191,9 +191,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    public String refreshUri(Long userId){
+    public String refreshUri(Long userId) {
         return nettyServiceLocator.getServiceInstance(String.valueOf(userId));
     }
+
+    @Override
+    public UploadUrlResponse uploadUrl(String fileName) {
+        UploadUrlResponse uploadUrlResponse = new UploadUrlResponse();
+        uploadUrlResponse.setUploadUrl(ossUtils.uploadUrl(CommonConstant.BUCKET_NAME,fileName,CommonConstant.PICTURE_EXPIRE_TIME));
+        uploadUrlResponse.setDownloadUrl(ossUtils.downUrl(CommonConstant.BUCKET_NAME,fileName));
+        return uploadUrlResponse;
+    }
+
+    @Override
+    public Boolean updateAvatar(UpdateAvatarRequest updateAvatarRequest) {
+        User user=this.getById(updateAvatarRequest.getUserId());
+        if(user==null){
+            return false;
+        }
+        user.setAvatar(updateAvatarRequest.getUri());
+        return this.updateById(user);
+    }
+
 }
 
 
