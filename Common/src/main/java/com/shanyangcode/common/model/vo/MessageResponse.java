@@ -1,5 +1,6 @@
 package com.shanyangcode.common.model.vo;
 
+import com.shanyangcode.common.model.dto.MessageBody;
 import lombok.Data;
 
 @Data
@@ -15,7 +16,6 @@ public class MessageResponse {
 
 
     private Integer sessionType;
-
 
 
     private String createdTime;
@@ -34,4 +34,6 @@ public class MessageResponse {
 
 
     private Integer role;
+
+    private MessageBody body;
 }

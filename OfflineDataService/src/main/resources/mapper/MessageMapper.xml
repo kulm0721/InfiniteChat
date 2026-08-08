@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shanyangcode.offlinedataservice.mapper.MessageMapper">
+
+    <resultMap id="BaseResultMap" type="com.shanyangcode.offlinedataservice.model.entity.Message">
+        <id property="messageId" column="message_id" />
+        <result property="senderId" column="sender_id" />
+        <result property="sessionId" column="session_id" />
+        <result property="type" column="type" />
+        <result property="content" column="content" />
+        <result property="replyId" column="reply_id" />
+        <result property="sessionType" column="session_type" />
+        <result property="createdTime" column="created_time" />
+        <result property="updatedTime" column="updated_time" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        message_id,sender_id,session_id,type,content,reply_id,
+        session_type,created_time,updated_time
+    </sql>
+</mapper>

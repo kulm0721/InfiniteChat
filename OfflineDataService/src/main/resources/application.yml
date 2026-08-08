@@ -3,7 +3,7 @@ spring:
     name: OfflineDataService
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:49152/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/infinitechat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: [REDACTED]
   data:
@@ -31,6 +31,21 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:18375
+
+canal:
+  server:
+    host: localhost
+    port: 11111
+  destination: example
+  username: canal
+  password: canal
+  filter: ".*\\..*"
+  client:
+    heartbeat:
+      interval: 2000
+      timeout: 3000
+    socket:
+      timeout: 6000
 
 server:
   port: 8101

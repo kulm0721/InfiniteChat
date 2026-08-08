@@ -28,4 +28,6 @@ public class MessageRequest {
 
 
     private String clientMessageId;
+
+    private MessageBody body;
 }
