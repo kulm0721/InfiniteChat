@@ -9,6 +9,7 @@ import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.common.model.vo.MessageResponse;
+import com.shanyangcode.common.utils.FormatDateUtil;
 import com.shanyangcode.offlinedataservice.client.UserServiceClient;
 import com.shanyangcode.offlinedataservice.mapper.MessageMapper;
 import com.shanyangcode.offlinedataservice.model.dto.HistoryMessageRequest;
@@ -199,7 +200,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
             response.setSenderId(msg.getSenderId());
             response.setType(msg.getType());
             response.setSessionType(msg.getSessionType());
-            response.setCreatedTime(String.valueOf(msg.getCreatedTime().getTime()));
+            response.setCreatedTime(FormatDateUtil.formatDate(msg.getCreatedTime()));
 
             MessageBody body = new MessageBody();
             body.setContent(msg.getContent());
