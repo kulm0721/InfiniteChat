@@ -16,8 +16,16 @@ public class UserSessionServiceImpl extends ServiceImpl<UserSessionMapper, UserS
     @Override
     public List<Long> getUserIdBySessionId(Long SessionId) {
         QueryWrapper<UserSession> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("SessionId", SessionId);
+        queryWrapper.eq("Session_id", SessionId);
         List<UserSession> userSessions = this.list(queryWrapper);
         return userSessions.stream().map(UserSession::getUserId).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Long> getSessionIdsByUserId(Long userId){
+        QueryWrapper<UserSession> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("user_id", userId);
+        List<UserSession> userSessions = this.list(queryWrapper);
+        return userSessions.stream().map(UserSession::getSessionId).collect(Collectors.toList());
     }
 }

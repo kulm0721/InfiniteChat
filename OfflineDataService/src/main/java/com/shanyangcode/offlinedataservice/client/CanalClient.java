@@ -1,8 +1,10 @@
 package com.shanyangcode.offlinedataservice.client;
 
+import com.alibaba.fastjson2.JSON;
 import com.alibaba.otter.canal.client.CanalConnector;
 import com.alibaba.otter.canal.protocol.CanalEntry;
 import com.alibaba.otter.canal.protocol.Message;
+import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.vo.MessageResponse;
 import jakarta.annotation.Resource;
@@ -10,13 +12,14 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 @Component
 @AllArgsConstructor
@@ -31,6 +34,11 @@ public class CanalClient implements CommandLineRunner {
     private static final long IDLE_CHECK_INTERVAL = 5000; // 5秒检查一次空闲状态
     // 需要监听的表名集合
     private static final Set<String> MONITOR_TABLES = Set.of("infinitechat.message");
+    private static final ThreadLocal<SimpleDateFormat> DATE_FORMATTER = ThreadLocal.withInitial(() -> {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        sdf.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
+        return sdf;
+    });
     @Resource
     private CanalConnector canalConnector;
     @Resource
@@ -184,11 +192,12 @@ public class CanalClient implements CommandLineRunner {
         log.info("表名：{}，数据：{}", tableName, map);
 
         //1.构建完整的消息对象
-        MessageResponse messageResponse = bulidMessageFromMap(map);
+        MessageResponse messageResponse = buildMessageFromMap(map);
         log.info("消息体：{}", messageResponse);
+        storeMessageToRedis(messageResponse);
     }
 
-    private MessageResponse bulidMessageFromMap(Map<String, String> map) {
+    private MessageResponse buildMessageFromMap(Map<String, String> map) {
         MessageResponse messageResponse = new MessageResponse();
         messageResponse.setSessionId(Long.valueOf(map.get("session_id")));
         messageResponse.setSenderId(Long.valueOf(map.get("sender_id")));
@@ -220,6 +229,31 @@ public class CanalClient implements CommandLineRunner {
             } catch (Exception ex2) {
                 log.error("断开连接错误", ex2);
             }
+        }
+    }
+
+    private void storeMessageToRedis(MessageResponse messageResponse) {
+        String key = CommonConstant.SESSION_KEY_REDIS + messageResponse.getSessionId();
+        String messageJson = JSON.toJSONString(messageResponse);
+        try {
+            double score = DATE_FORMATTER.get().parse(messageResponse.getCreatedTime()).getTime();
+            long cutoff = System.currentTimeMillis() - CommonConstant.SEVEN_DAYS_MILLIS;
+
+            stringRedisTemplate.executePipelined(new SessionCallback<>() {
+                @Override
+                @SuppressWarnings("NullableProblems")
+                public <K, V> Object execute(RedisOperations<K, V> operations) throws DataAccessException {
+                    StringRedisTemplate template = (StringRedisTemplate) operations;
+                    //写入消息
+                    template.opsForZSet().add(key, messageJson, score);
+                    //清理7天前的数据
+                    template.opsForZSet().removeRangeByScore(key, 0, cutoff);
+                    return null;
+                }
+            });
+            log.debug("消息已存入Redis, sessionId={}, messageId={}", messageResponse.getSessionId(), messageResponse.getMessageId());
+        } catch (Exception e) {
+            log.error("存储消息到Redis失败, sessionId={}, messageId={}", messageResponse.getSessionId(), messageResponse.getMessageId(), e);
         }
     }
 }

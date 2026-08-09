@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface UserSessionService extends IService<UserSession> {
     List<Long> getUserIdBySessionId(Long SessionId);
+    List<Long> getSessionIdsByUserId(Long UserId);
 }

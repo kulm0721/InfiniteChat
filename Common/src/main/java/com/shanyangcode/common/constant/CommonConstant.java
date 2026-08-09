@@ -30,4 +30,12 @@ public class CommonConstant {
     public static final String BUCKET_NAME = "infinitechat";
 
     public static final Integer PICTURE_EXPIRE_TIME = 3000;
+
+    public static final String OFFLINE_KEY_REDIS = "user:offline:";
+
+    public static final String SESSION_KEY_REDIS = "session:";
+
+    public static final Long SEVEN_DAYS_MILLIS = 7L * 24 * 60 * 60 * 1000;
+
+    public static final Integer DEFAULT_LIMIT = 20;
 }

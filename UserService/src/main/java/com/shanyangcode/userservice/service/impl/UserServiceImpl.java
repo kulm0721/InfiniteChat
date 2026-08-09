@@ -155,7 +155,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         stringRedisTemplate.opsForValue().set(CommonConstant.REFRESH_TOKEN_PREFIX + userId, refreshToken, CommonConstant.REFRESH_TOKEN_EXPIRE_TIME, CommonConstant.REFRESH_TOKEN_UNIT);
         String nettyUri = nettyServiceLocator.getServiceInstance(loginAndRegisterResponse.getUserId().toString());
         loginAndRegisterResponse.setNettyUri(nettyUri);
+
+        //获取并清除离线时间
+        Long offlineTime=getAndClearOfflineTime(userId);
+        loginAndRegisterResponse.setOfflineTime(offlineTime);
         return loginAndRegisterResponse;
+    }
+
+    private Long getAndClearOfflineTime(String userId) {
+        String key=CommonConstant.OFFLINE_KEY_REDIS+userId;
+        String value = stringRedisTemplate.opsForValue().getAndDelete(key);
+        if(StringUtils.isNotBlank(value)) {
+            log.info("用户 {} 上线，离线时间: {}", userId, value);
+            return Long.parseLong(value);
+        }
+
+        //新用户首次登陆没有离线记录
+        log.debug("用户 {} 无离线时间记录", userId);
+        return null;
     }
 
     @Override

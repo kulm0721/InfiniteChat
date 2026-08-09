@@ -22,4 +22,6 @@ public class LoginAndRegisterResponse {
     private String refreshToken;
 
     private String nettyUri;
+
+    private Long offlineTime;
 }

@@ -44,7 +44,7 @@ spring:
         - id: OfflineDataService
           uri: lb://OfflineDataService
           predicates:
-            - Path=/api/offline/**
+            - Path=/api/message/**
         - id: AiService
           uri: lb://AiService
           predicates:

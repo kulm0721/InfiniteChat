@@ -13,6 +13,7 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.timeout.IdleStateEvent;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.util.Date;
@@ -20,6 +21,8 @@ import java.util.Date;
 @Slf4j
 @AllArgsConstructor
 public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
+    private final StringRedisTemplate stringRedisTemplate;
+
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Override
@@ -138,6 +141,7 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
         try {
             if (userId != null) {
                 ChannelManager.removeUserChannel(userId);
+                saveOfflineTime(userId);
             }
             ChannelManager.removeChannelUser(channel);
         } catch (Exception e) {
@@ -147,5 +151,12 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
                 channel.close();
             }
         }
+    }
+
+    private void saveOfflineTime(String userId) {
+        String key=CommonConstant.OFFLINE_KEY_REDIS+userId;
+        String timestamp=String.valueOf(System.currentTimeMillis());
+        stringRedisTemplate.opsForValue().set(key, timestamp);
+        log.debug("记录用户离线时间: userId={}, timestamp={}", userId, timestamp);
     }
 }
