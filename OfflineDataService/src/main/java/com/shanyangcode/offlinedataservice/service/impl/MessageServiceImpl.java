@@ -10,10 +10,12 @@ import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.common.model.vo.MessageResponse;
 import com.shanyangcode.common.utils.FormatDateUtil;
+import com.shanyangcode.offlinedataservice.client.AiServiceClient;
 import com.shanyangcode.offlinedataservice.client.UserServiceClient;
 import com.shanyangcode.offlinedataservice.mapper.MessageMapper;
 import com.shanyangcode.offlinedataservice.model.dto.HistoryMessageRequest;
 import com.shanyangcode.offlinedataservice.model.dto.OfflineMessageRequest;
+import com.shanyangcode.offlinedataservice.model.dto.SessionSummaryRequest;
 import com.shanyangcode.offlinedataservice.model.entity.Message;
 import com.shanyangcode.offlinedataservice.service.MessageService;
 import jakarta.annotation.Resource;
@@ -22,6 +24,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -34,6 +39,8 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
     private MessageMapper messageMapper;
     @Resource
     private UserServiceClient userServiceClient;
+    @Resource
+    private AiServiceClient aiServiceClient;
 
     @Override
     public void saveMessageToMySQL(MessageRequest messageRequest) {
@@ -73,7 +80,6 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         log.info("用户 {} 离线消息查询完成，共 {} 个会话有新消息", userId, result.size());
         return result;
     }
-
 
     /**
      * 获取指定时间之后的消息（离线消息）
@@ -134,18 +140,18 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         List<MessageResponse> result = new ArrayList<>();
 
         // 1. 如果 beforeTime 在热数据范围内，先查 Redis
-        if(beforeTime > hotBoundary){
-            List<MessageResponse> redisMessages = getMessagesFromRedisBefore(sessionId, beforeTime,limit);
+        if (beforeTime > hotBoundary) {
+            List<MessageResponse> redisMessages = getMessagesFromRedisBefore(sessionId, beforeTime, limit);
             result.addAll(redisMessages);
         }
 
         //2.Redis 不够，再查 MySQL
-        if(result.size()<limit){
+        if (result.size() < limit) {
             int remaining = limit - result.size();
             // MySQL 查询的 beforeTime：取 Redis 最早消息的时间，或者原始 beforeTime
-            long mysqlBeforeTime=beforeTime>hotBoundary?hotBoundary:beforeTime;
+            long mysqlBeforeTime = beforeTime > hotBoundary ? hotBoundary : beforeTime;
 
-            List<MessageResponse> mysqlMessages=getMessagesFromMySQLBefore(sessionId,mysqlBeforeTime,remaining);
+            List<MessageResponse> mysqlMessages = getMessagesFromMySQLBefore(sessionId, mysqlBeforeTime, remaining);
             result.addAll(mysqlMessages);
         }
 
@@ -153,20 +159,19 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         return result;
     }
 
-
     /**
      * 从 Redis 获取指定时间之前的消息
      */
-    private List<MessageResponse> getMessagesFromRedisBefore(Long sessionId,long beforeTime,int limit) {
-        String key=CommonConstant.SESSION_KEY_REDIS + sessionId;
-        Set<String> messageJsonSet=stringRedisTemplate.opsForZSet().reverseRangeByScore(key,0,beforeTime-1,0,limit);
+    private List<MessageResponse> getMessagesFromRedisBefore(Long sessionId, long beforeTime, int limit) {
+        String key = CommonConstant.SESSION_KEY_REDIS + sessionId;
+        Set<String> messageJsonSet = stringRedisTemplate.opsForZSet().reverseRangeByScore(key, 0, beforeTime - 1, 0, limit);
 
-        if(messageJsonSet == null || messageJsonSet.isEmpty()) {
+        if (messageJsonSet == null || messageJsonSet.isEmpty()) {
             return Collections.emptyList();
         }
 
         List<MessageResponse> messages = new ArrayList<>();
-        for(String json : messageJsonSet){
+        for (String json : messageJsonSet) {
             messages.add(JSON.parseObject(json, MessageResponse.class));
         }
         return messages;
@@ -176,11 +181,11 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
      * 从 MySQL 获取指定时间之前的消息
      */
 
-    private List<MessageResponse> getMessagesFromMySQLBefore(Long sessionId,long beforeTime,int limit) {
+    private List<MessageResponse> getMessagesFromMySQLBefore(Long sessionId, long beforeTime, int limit) {
         QueryWrapper<Message> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("session_id", sessionId)
-                .lt("create_time", new Date(beforeTime))
-                .orderByDesc("create_time")
+                .lt("created_time", new Date(beforeTime))
+                .orderByDesc("created_time")
                 .last("limit " + limit);
 
         List<Message> messages = messageMapper.selectList(queryWrapper);
@@ -218,11 +223,47 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
     private List<MessageResponse> getMessagesFromMySQLAfter(Long sessionId, long afterTime, long beforeTime) {
         QueryWrapper<Message> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("session_id", sessionId)
-                .gt("create_time", new Date(afterTime))
-                .lt("create_time", new Date(beforeTime))
-                .orderByDesc("create_time");
+                .gt("created_time", new Date(afterTime))
+                .lt("created_time", new Date(beforeTime))
+                .orderByAsc("created_time");
 
         List<Message> messages = messageMapper.selectList(queryWrapper);
         return convertToResponses(messages);
+    }
+
+    @Override
+    public String getSummary(SessionSummaryRequest sessionSummaryRequest) {
+        return historyChatLog(sessionSummaryRequest.getSessionId(), sessionSummaryRequest.getHours());
+    }
+
+    public String historyChatLog(Long sessionId, Integer hours) {
+        Map<Long, String> userNickName = userServiceClient.getUserNickName(sessionId);
+
+        ZoneId shanghai = ZoneId.of("Asia/Shanghai");
+        LocalDateTime nowShanghai = LocalDateTime.now(shanghai);
+        LocalDateTime threshold = nowShanghai.minusHours(hours);
+        // 格式化为 yyyy-MM-dd HH:mm:ss 字符串
+        String timeThresholdStr = threshold.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+        QueryWrapper<Message> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("session_id", sessionId).ge("created_time", timeThresholdStr).orderByAsc("created_time");
+
+        List<Message> messages = this.list(queryWrapper);
+        StringBuilder chatLog = new StringBuilder();
+
+        for (Message message : messages) {
+            Long senderId = message.getSenderId();
+            String senderName = userNickName.get(senderId);
+            String timeStr = FormatDateUtil.formatDate(message.getCreatedTime());
+            chatLog.append("[").append(senderName).append("] ").append(timeStr).append(": ").append(message.getContent()).append("\n");
+        }
+        String result = "没有消息";
+        try {
+            result = aiServiceClient.chatSummary(chatLog.toString().trim());
+        } catch (Exception e) {
+            throw new RuntimeException("调用会话总结失败");
+        }
+
+        return result;
     }
 }

@@ -5,6 +5,7 @@ import com.shanyangcode.common.common.ResultUtils;
 import com.shanyangcode.common.model.vo.MessageResponse;
 import com.shanyangcode.offlinedataservice.model.dto.HistoryMessageRequest;
 import com.shanyangcode.offlinedataservice.model.dto.OfflineMessageRequest;
+import com.shanyangcode.offlinedataservice.model.dto.SessionSummaryRequest;
 import com.shanyangcode.offlinedataservice.service.MessageService;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,5 +38,10 @@ public class MessageController {
     @PostMapping("/history")
     public BaseResponse<List<MessageResponse>> getHistoryMessages(@RequestBody HistoryMessageRequest request) {
         return ResultUtils.success(messageService.getHistoryMessages(request));
+    }
+
+    @PostMapping("/summary")
+    public BaseResponse<String> chatSummary(@RequestBody SessionSummaryRequest sessionSummaryRequest) {
+        return ResultUtils.success(messageService.getSummary(sessionSummaryRequest));
     }
 }

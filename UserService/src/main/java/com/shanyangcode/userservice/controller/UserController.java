@@ -25,6 +25,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/user")
 @Validated
@@ -81,7 +83,7 @@ public class UserController {
     }
 
     @GetMapping("/uploadUrl")
-public BaseResponse<UploadUrlResponse> getUploadUrl(@RequestParam String fileName) {
+    public BaseResponse<UploadUrlResponse> getUploadUrl(@RequestParam String fileName) {
         return ResultUtils.success(userService.uploadUrl(fileName));
     }
 
@@ -90,6 +92,10 @@ public BaseResponse<UploadUrlResponse> getUploadUrl(@RequestParam String fileNam
         return ResultUtils.success(userService.updateAvatar(updateAvatarRequest));
     }
 
+    @GetMapping("/get/nickname")
+    public Map<Long, String> getUserNickName(@RequestParam("sessionId") Long sessionId) {
+        return userService.getUserNickName(sessionId);
+    }
 }
 
 

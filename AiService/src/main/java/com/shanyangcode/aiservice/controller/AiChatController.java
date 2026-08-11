@@ -6,10 +6,7 @@ import com.shanyangcode.aiservice.monitor.MonitorContext;
 import com.shanyangcode.aiservice.monitor.MonitorContextHolder;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
 @RestController
@@ -41,5 +38,10 @@ public class AiChatController {
             MonitorContextHolder.setContext(context);
             return aiChat.streamChat(chatRequest.getSessionId(), chatRequest.getPrompt()).doFinally(signal->MonitorContextHolder.clearContext());
         });
+    }
+
+    @GetMapping("/summary")
+    public String chatSummary(@RequestParam String historyLog) {
+        return aiChat.chatSummary(historyLog);
     }
 }

@@ -39,7 +39,9 @@ import org.springframework.util.DigestUtils;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -269,6 +271,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return this.updateById(user);
     }
 
+    @Override
+    public Map<Long,String> getUserNickName(Long sessionId) {
+        List<Long> userIds=userSessionService.getUserIdBySessionId(sessionId);
+        QueryWrapper<User> queryWrapper=new QueryWrapper<>();
+        queryWrapper.in("user_id",userIds);
+        List<User> users=this.list(queryWrapper);
+        return users.stream().collect(Collectors.toMap(User::getUserId,User::getNickname));
+    }
 }
 
 

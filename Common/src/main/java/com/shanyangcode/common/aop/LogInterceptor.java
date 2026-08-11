@@ -1,6 +1,4 @@
-package com.shanyangcode.userservice.aop;
-
-import java.util.UUID;
+package com.shanyangcode.common.aop;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -14,9 +12,8 @@ import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-/**
- * 请求响应日志 AOP
- **/
+import java.util.UUID;
+
 @Aspect
 @Component
 @Slf4j
@@ -25,7 +22,7 @@ public class LogInterceptor {
     /**
      * 执行拦截
      */
-    @Around("execution(* com.shanyangcode.userservice.controller.*.*(..))")
+    @Around("execution(* com.shanyangcode..controller.*.*(..))")
     public Object doInterceptor(ProceedingJoinPoint point) throws Throwable {
         // 计时
         StopWatch stopWatch = new StopWatch();
