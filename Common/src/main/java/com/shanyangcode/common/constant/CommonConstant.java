@@ -38,4 +38,10 @@ public class CommonConstant {
     public static final Long SEVEN_DAYS_MILLIS = 7L * 24 * 60 * 60 * 1000;
 
     public static final Integer DEFAULT_LIMIT = 20;
+
+    public static final Long AI_ID = 111111111L;
+
+    public static final Integer USER_ROLE_NORMAL = 2;
+
+    public static final Integer SESSION_STATUS = 0;
 }

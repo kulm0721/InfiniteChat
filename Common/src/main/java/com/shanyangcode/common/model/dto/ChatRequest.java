@@ -1,4 +1,4 @@
-package com.shanyangcode.aiservice.model.dto;
+package com.shanyangcode.common.model.dto;
 
 import lombok.Data;
 

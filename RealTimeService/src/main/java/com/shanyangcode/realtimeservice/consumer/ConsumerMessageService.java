@@ -2,11 +2,16 @@ package com.shanyangcode.realtimeservice.consumer;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONUtil;
+import com.shanyangcode.common.constant.CommonConstant;
+import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.common.model.vo.MessageResponse;
 import com.shanyangcode.common.utils.FormatDateUtil;
+import com.shanyangcode.realtimeservice.client.AiServiceClient;
 import com.shanyangcode.realtimeservice.client.UserServiceClient;
-import com.shanyangcode.realtimeservice.constant.SessionTypeConstant;
+import com.shanyangcode.common.constant.SessionTypeConstant;
+import com.shanyangcode.common.model.dto.ChatRequest;
+import com.shanyangcode.realtimeservice.utils.SnowflakeDynamicUtil;
 import com.shanyangcode.realtimeservice.websocket.ChannelManager;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
@@ -14,8 +19,10 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -24,6 +31,17 @@ public class ConsumerMessageService {
 
     @Resource
     private UserServiceClient userServiceClient;
+
+    @Resource
+    private AiServiceClient aiServiceClient;
+
+    @Resource
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    /**
+     * AI 服务调用失败时的兜底回复
+     */
+    private static final String AI_ERROR_REPLY = "抱歉，AI 暂时不在线，请稍后再试～";
 
     @KafkaListener(topics = "message-topic", groupId = "infinite-chat-push-group-0")
     public void consume(String message) {
@@ -34,6 +52,8 @@ public class ConsumerMessageService {
             signalMessage(messageRequest);
         } else if (messageRequest.getSessionType() == SessionTypeConstant.GROUP_TYPE) {
             groupMessage(messageRequest);
+        }else if(messageRequest.getSessionType()==SessionTypeConstant.ROBOT_TYPE) {
+            aiSignalMessage(messageRequest);
         }
     }
 
@@ -61,6 +81,42 @@ public class ConsumerMessageService {
         }
     }
 
+    public void aiSignalMessage(MessageRequest messageRequest) {
+        MessageResponse messageResponse = createMessageResponse(messageRequest);
+        messageResponse.setMessageId(SnowflakeDynamicUtil.nextId());
+
+        //获取Ai回复
+        ChatRequest chatRequest = new ChatRequest();
+        chatRequest.setPrompt(messageRequest.getBody().getContent());
+        chatRequest.setSessionId(messageRequest.getSessionId());
+        chatRequest.setUserId(messageRequest.getSenderId());
+        String chat;
+        try {
+            chat = aiServiceClient.chat(chatRequest);
+        } catch (Exception e) {
+            //AI服务调用失败，推送兜底回复，避免异常抛出后消息被重复消费拖死消费链路
+            log.error("调用AiService失败, sessionId={}, userId={}", messageRequest.getSessionId(), messageRequest.getSenderId(), e);
+            chat = AI_ERROR_REPLY;
+        }
+
+        //AI 回复使用独立时间戳，避免与用户消息同分导致历史消息乱序
+        messageResponse.setCreatedTime(FormatDateUtil.formatDate(new Date()));
+
+        MessageBody messageBody = messageResponse.getBody();
+        messageBody.setContent(chat);
+        messageResponse.setSenderId(CommonConstant.AI_ID);
+
+        pushMessageToUser(messageResponse, chatRequest.getUserId());
+        BeanUtil.copyProperties(messageResponse, messageRequest);
+
+        kafkaTemplate.send(CommonConstant.KAFKA_MESSAGE_TOPIC_STORE, JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
+            if (failure != null) {
+                log.error("AI回复写入store-topic失败, messageId={}", messageRequest.getMessageId(), failure);
+            } else {
+                log.info("AI回复写入store-topic成功, messageId={}, offset={}", messageRequest.getMessageId(), success.getRecordMetadata().offset());
+            }
+        });
+    }
     public MessageResponse createMessageResponse(MessageRequest messageRequest) {
         MessageResponse messageResponse = new MessageResponse();
         BeanUtil.copyProperties(messageRequest, messageResponse);

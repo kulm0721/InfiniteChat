@@ -1,7 +1,7 @@
 package com.shanyangcode.aiservice.controller;
 
 import com.shanyangcode.aiservice.ai.AiChat;
-import com.shanyangcode.aiservice.model.dto.ChatRequest;
+import com.shanyangcode.common.model.dto.ChatRequest;
 import com.shanyangcode.aiservice.monitor.MonitorContext;
 import com.shanyangcode.aiservice.monitor.MonitorContextHolder;
 import jakarta.annotation.Resource;
