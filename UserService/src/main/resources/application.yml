@@ -13,6 +13,17 @@ spring:
       port: 6379
       password: [REDACTED]
       timeout: 30000
+      # 配置 redis 连接池
+      lettuce:
+        pool:
+          # 连接池中最小的空闲连接
+          min-idle: 4
+          # 连接池中最大的空闲连接
+          max-idle: 8
+          # 连接池中最大数据库连接数
+          max-active: 8
+          # 连接池最大阻塞等待时间
+          max-wait: 5000ms
   mail:
     host: smtp.qq.com
     port: 587
@@ -29,8 +40,26 @@ spring:
       discovery:
         server-addr: localhost:18375
 
+  # Kafka 配置（UserService 目前无 Kafka 代码，此段为预留模板）
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # 生产端可靠性：等所有副本 ack + 失败重试 3 次
+      acks: all
+      retries: 3
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # 注意：若将来做"落库/持久化"消费，需把 auto-offset-reset 改 earliest、enable-auto-commit 改 false 并手动 ack，否则可能丢消息
+      auto-offset-reset: latest
+      enable-auto-commit: true
 
 mybatis-plus:
+  configuration:
+    # 开发期打印 SQL，生产环境请移除
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
       logic-delete-field: isDelete
@@ -44,3 +73,8 @@ minio:
 
 server:
   port: 8104
+
+# Snowflake ID生成器配置
+snowflake:
+  workerId: 1
+  datacenterId: 1

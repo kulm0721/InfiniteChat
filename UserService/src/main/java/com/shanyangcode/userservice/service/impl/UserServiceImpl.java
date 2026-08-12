@@ -32,6 +32,7 @@ import com.shanyangcode.userservice.utils.RandomCodeUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Resource
     private SessionService sessionService;
 
+    @Value("${snowflake.workerId}")
+    private long workerId;
+
+    @Value("${snowflake.datacenterId}")
+    private long datacenterId;
+
     @Override
     public void sendCaptcha(String targetEmail) {
         String existingCode = stringRedisTemplate.opsForValue().get(targetEmail);
@@ -100,7 +107,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
 
         LoginAndRegisterResponse loginAndRegisterResponse = new LoginAndRegisterResponse();
-        Snowflake snowflake = IdUtil.getSnowflake(UserConstant.WORKER_ID, UserConstant.DATA_CENTER_ID);
+        Snowflake snowflake = IdUtil.getSnowflake(workerId, datacenterId);
         Long userId= snowflake.nextId();
         synchronized (email.intern()) {
             User newUser = new User();
