@@ -3,9 +3,10 @@ package com.shanyangcode.realtimeservice.websocket;
 
 import cn.hutool.json.JSONUtil;
 import com.shanyangcode.common.constant.CommonConstant;
+import com.shanyangcode.common.constant.KafkaTopicConstant;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.realtimeservice.constant.WebSocketConstant;
-import com.shanyangcode.realtimeservice.utils.SnowflakeDynamicUtil;
+import com.shanyangcode.common.utils.SnowflakeUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -106,11 +107,11 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
 
     public void sendMessageKafka(String message, Channel channel) {
         MessageRequest messageRequest = JSONUtil.toBean(message, MessageRequest.class);
-        messageRequest.setMessageId(SnowflakeDynamicUtil.nextId());
+        messageRequest.setMessageId(SnowflakeUtil.nextId());
         messageRequest.setCreatedTime(new Date());
 
         //消息存储
-        kafkaTemplate.send(CommonConstant.KAFKA_MESSAGE_TOPIC_STORE, JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
+        kafkaTemplate.send(KafkaTopicConstant.TOPIC_MESSAGE_STORE, JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
             if (failure != null) {
                 log.error("生产者生产失败 ：{}", failure.getMessage());
             } else {
@@ -119,7 +120,7 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
         });
 
         // 消息推送消息
-        kafkaTemplate.send(CommonConstant.KAFKA_MESSAGE_TOPIC_PUSH, messageRequest.getSessionId().toString(), JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
+        kafkaTemplate.send(KafkaTopicConstant.TOPIC_MESSAGE_PUSH, messageRequest.getSessionId().toString(), JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
             if (failure != null) {
                 // 生产者生产失败
                 log.error("生产者生产失败: " + failure.getMessage());

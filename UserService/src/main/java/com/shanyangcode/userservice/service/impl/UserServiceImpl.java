@@ -1,8 +1,6 @@
 package com.shanyangcode.userservice.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.lang.Snowflake;
-import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.shanyangcode.common.common.ErrorCode;
@@ -10,6 +8,7 @@ import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.utils.JwtUtil;
+import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.userservice.loadbalancer.NettyServiceLocator;
 import com.shanyangcode.userservice.mapper.UserMapper;
@@ -32,7 +31,6 @@ import com.shanyangcode.userservice.utils.RandomCodeUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -69,12 +67,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Resource
     private SessionService sessionService;
 
-    @Value("${snowflake.workerId}")
-    private long workerId;
-
-    @Value("${snowflake.datacenterId}")
-    private long datacenterId;
-
     @Override
     public void sendCaptcha(String targetEmail) {
         String existingCode = stringRedisTemplate.opsForValue().get(targetEmail);
@@ -107,8 +99,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
 
         LoginAndRegisterResponse loginAndRegisterResponse = new LoginAndRegisterResponse();
-        Snowflake snowflake = IdUtil.getSnowflake(workerId, datacenterId);
-        Long userId= snowflake.nextId();
+        Long userId = SnowflakeUtil.nextId();
         synchronized (email.intern()) {
             User newUser = new User();
             newUser.setEmail(email);
@@ -120,7 +111,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             BeanUtil.copyProperties(getUser(email), loginAndRegisterResponse);
         }
 
-        Long sessionId=snowflake.nextId();
+        Long sessionId = SnowflakeUtil.nextId();
         Session session = new Session();
         session.setSessionId(sessionId);
         session.setStatus(CommonConstant.SESSION_STATUS);

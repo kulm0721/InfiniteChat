@@ -17,10 +17,6 @@ public class CommonConstant {
 
     public static final TimeUnit REFRESH_TOKEN_UNIT = TimeUnit.DAYS; // 天
 
-    public static final String KAFKA_MESSAGE_TOPIC_STORE = "store-topic";
-
-    public static final String KAFKA_MESSAGE_TOPIC_PUSH = "message-topic";
-
     public static final String REDIS_NETTY_URI = "nettyUri";
 
     public static final String DISCOVERY_CLIENT_NAME = "RealTimeService";

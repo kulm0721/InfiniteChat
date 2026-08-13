@@ -3,6 +3,7 @@ package com.shanyangcode.realtimeservice.consumer;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.json.JSONUtil;
 import com.shanyangcode.common.constant.CommonConstant;
+import com.shanyangcode.common.constant.KafkaTopicConstant;
 import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.common.model.vo.MessageResponse;
@@ -11,7 +12,7 @@ import com.shanyangcode.realtimeservice.client.AiServiceClient;
 import com.shanyangcode.realtimeservice.client.UserServiceClient;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.model.dto.ChatRequest;
-import com.shanyangcode.realtimeservice.utils.SnowflakeDynamicUtil;
+import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.realtimeservice.websocket.ChannelManager;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
@@ -83,7 +84,7 @@ public class ConsumerMessageService {
 
     public void aiSignalMessage(MessageRequest messageRequest) {
         MessageResponse messageResponse = createMessageResponse(messageRequest);
-        messageResponse.setMessageId(SnowflakeDynamicUtil.nextId());
+        messageResponse.setMessageId(SnowflakeUtil.nextId());
 
         //获取Ai回复
         ChatRequest chatRequest = new ChatRequest();
@@ -109,7 +110,7 @@ public class ConsumerMessageService {
         pushMessageToUser(messageResponse, chatRequest.getUserId());
         BeanUtil.copyProperties(messageResponse, messageRequest);
 
-        kafkaTemplate.send(CommonConstant.KAFKA_MESSAGE_TOPIC_STORE, JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
+        kafkaTemplate.send(KafkaTopicConstant.TOPIC_MESSAGE_STORE, JSONUtil.toJsonStr(messageRequest)).whenComplete((success, failure) -> {
             if (failure != null) {
                 log.error("AI回复写入store-topic失败, messageId={}", messageRequest.getMessageId(), failure);
             } else {
