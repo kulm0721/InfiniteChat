@@ -12,22 +12,23 @@ import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.userservice.constant.FriendStatusEnum;
 import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.userservice.constant.UserStateEnum;
+import com.shanyangcode.userservice.mapper.ApplyFriendMapper;
 import com.shanyangcode.userservice.mapper.FriendMapper;
 import com.shanyangcode.userservice.mapper.SessionMapper;
 import com.shanyangcode.userservice.mapper.UserSessionMapper;
 import com.shanyangcode.userservice.model.dto.FriendDTO;
 import com.shanyangcode.userservice.model.dto.PageRequest;
-import com.shanyangcode.userservice.model.entity.Friend;
-import com.shanyangcode.userservice.model.entity.Session;
-import com.shanyangcode.userservice.model.entity.User;
-import com.shanyangcode.userservice.model.entity.UserSession;
+import com.shanyangcode.userservice.model.entity.*;
 import com.shanyangcode.userservice.model.vo.FriendDetailVO;
 import com.shanyangcode.userservice.service.FriendService;
 import com.shanyangcode.userservice.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,16 +38,29 @@ import java.util.stream.Collectors;
 @Service
 public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> implements FriendService {
 
+    /**
+     * Redis Key 前缀（与 MessageValidationServiceImpl 保持一致）
+     */
+    private static final String FRIEND_STATUS_KEY_PREFIX = "msg:validate:friend:status:";
     private final UserService userService;
     private final SessionMapper sessionMapper;
     private final UserSessionMapper userSessionMapper;
     private final FriendMapper friendMapper;
+    private final ApplyFriendMapper applyFriendMapper;
+    private final StringRedisTemplate stringRedisTemplate;
 
-    public FriendServiceImpl(UserService userService, SessionMapper sessionMapper, UserSessionMapper userSessionMapper, FriendMapper friendMapper) {
+    public FriendServiceImpl(UserService userService,
+                             SessionMapper sessionMapper,
+                             UserSessionMapper userSessionMapper,
+                             FriendMapper friendMapper,
+                             ApplyFriendMapper applyFriendMapper,
+                             StringRedisTemplate stringRedisTemplate) {
         this.userService = userService;
         this.sessionMapper = sessionMapper;
         this.userSessionMapper = userSessionMapper;
         this.friendMapper = friendMapper;
+        this.applyFriendMapper = applyFriendMapper;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     /**
@@ -249,20 +263,20 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         List<User> users = userService.list(userWrapper);
 
         // 4. 查询好友与当前用户之间的会话ID映射（批量查询优化）
-        Map<Long,String> friendSessionMap=buildFriendSessionMap(userId,friendIds);
+        Map<Long, String> friendSessionMap = buildFriendSessionMap(userId, friendIds);
 
         // 5. 构建好友ID到好友关系的映射（避免嵌套stream，O(n+m)），n = friendList 的大小（好友关系数量），m = users 的大小（查询到的好友用户信息数量）
-        Map<Long,Friend> friendRelationMap=friendList.stream().collect(Collectors.toMap(Friend::getFriendId,f->f));
+        Map<Long, Friend> friendRelationMap = friendList.stream().collect(Collectors.toMap(Friend::getFriendId, f -> f));
 
         //6.构建FriendDTO列表
-        List<FriendDTO> friendDTOList=users.stream()
-                .map(user->{
-                    FriendDTO dto=new FriendDTO();
+        List<FriendDTO> friendDTOList = users.stream()
+                .map(user -> {
+                    FriendDTO dto = new FriendDTO();
                     dto.setUserId(String.valueOf(user.getUserId())); // 设置dto的ID（好友用户ID）
                     dto.setNickname(user.getNickname());
                     dto.setAvatar(user.getAvatar());
                     dto.setSignature(user.getDescription());
-                    Friend friendRelation=friendRelationMap.get(user.getUserId());
+                    Friend friendRelation = friendRelationMap.get(user.getUserId());
                     dto.setStatus(friendRelation != null ? friendRelation.getStatus() : FriendStatusEnum.NON_FRIEND.getCode()); // 如果存在好友关系则取其状态，否则标记为非好友
                     dto.setSessionId(friendSessionMap.get(user.getUserId())); // 从会话映射中获取该用户与当前用户的聊天会话ID
                     return dto;
@@ -307,9 +321,9 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
      * @param friendIds 好友ID列表
      * @return 好友ID到会话ID的映射
      */
-    private Map<Long, String> buildFriendSessionMap(Long userId,List<Long> friendIds) {
+    private Map<Long, String> buildFriendSessionMap(Long userId, List<Long> friendIds) {
         Map<Long, String> friendSessionMap = new HashMap<>();
-        if(friendIds.isEmpty()) {
+        if (friendIds.isEmpty()) {
             return friendSessionMap;
         }
 
@@ -318,13 +332,13 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         currentUserSessionWrapper.eq(UserSession::getUserId, userId);
         List<UserSession> currentUserSessions = userSessionMapper.selectList(currentUserSessionWrapper);
 
-        if(currentUserSessions.isEmpty()) {
+        if (currentUserSessions.isEmpty()) {
             return friendSessionMap;
         }
 
         // 2. 获取当前用户的所有会话ID
         // 把上面的 currentUserSessions 对象转换成会话ID列表
-        List<Long> currentUserSessionIds=currentUserSessions.stream().map(UserSession::getSessionId).collect(Collectors.toList());
+        List<Long> currentUserSessionIds = currentUserSessions.stream().map(UserSession::getSessionId).collect(Collectors.toList());
 
         // 3. 查询这些会话的详细信息，筛选出单聊会话（SIGNAL_TYPE）
         LambdaQueryWrapper<Session> sessionWrapper = new LambdaQueryWrapper<>();
@@ -332,12 +346,12 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
                 .eq(Session::getType, SessionTypeConstant.SIGNAL_TYPE);
         List<Session> singleChatSessions = sessionMapper.selectList(sessionWrapper);
 
-        if(singleChatSessions.isEmpty()) {
+        if (singleChatSessions.isEmpty()) {
             return friendSessionMap;
         }
 
         //4.获取单聊会话id列表
-        List<Long> singleChatSessionIds=singleChatSessions.stream().map(Session::getSessionId).collect(Collectors.toList());
+        List<Long> singleChatSessionIds = singleChatSessions.stream().map(Session::getSessionId).collect(Collectors.toList());
 
         //5.查询所有好友在这些会话中的 UserSession 记录
         LambdaQueryWrapper<UserSession> friendSessionWrapper = new LambdaQueryWrapper<>();
@@ -346,13 +360,165 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         List<UserSession> friendUserSessions = userSessionMapper.selectList(friendSessionWrapper);
 
         // 6. 构建 friendId -> sessionId 映射
-        for(UserSession friendUserSession : friendUserSessions) {
-            Long friendId=friendUserSession.getUserId();
-            Long sessionId=friendUserSession.getSessionId();
+        for (UserSession friendUserSession : friendUserSessions) {
+            Long friendId = friendUserSession.getUserId();
+            Long sessionId = friendUserSession.getSessionId();
 
-            friendSessionMap.put(friendId,String.valueOf(sessionId));
+            friendSessionMap.put(friendId, String.valueOf(sessionId));
         }
         return friendSessionMap;
 
+    }
+
+//=========================================================================================================================
+
+    /**
+     * 删除好友关系
+     * <p>
+     * 处理流程：
+     * 1. 删除双向好友关系
+     * 2. 删除相关的好友申请记录
+     * 3. 删除会话和用户会话关系
+     * 4. 清除好友关系缓存
+     *
+     * @param userId   当前用户ID
+     * @param friendId 好友ID
+     * @return 删除是否成功
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteFriend(Long userId, Long friendId) {
+        validateUserId(userId);
+        validateUserId(friendId);
+
+        // 不能删除自己
+        ThrowUtils.throwIf(userId.equals(friendId), ErrorCode.OPERATION_ERROR, "不能删除自己");
+
+        // 1. 删除好友关系记录，返回删除行数用于校验好友关系是否存在
+        int deleted = deleteFriendRecords(userId, friendId);
+        ThrowUtils.throwIf(deleted == 0, ErrorCode.OPERATION_ERROR, "对方不是你的好友");
+
+        // 2. 删除好友申请记录
+        deleteApplyFriendRecords(userId, friendId);
+
+        // 3. 删除会话记录
+        deleteSessionRecords(userId, friendId);
+
+        // 4. 删除双向好友关系缓存
+        evictFriendCache(userId, friendId);
+
+        return true;
+    }
+
+    /**
+     * 删除好友申请记录（使用Lambda Wrapper）
+     *
+     * @param userId   用户ID
+     * @param friendId 好友ID
+     */
+    private void deleteApplyFriendRecords(Long userId, Long friendId) {
+        LambdaQueryWrapper<ApplyFriend> wrapper = new LambdaQueryWrapper<>();
+        wrapper.and(w -> w
+                .nested(nested -> nested.eq(ApplyFriend::getSenderId, userId)
+                        .eq(ApplyFriend::getReceiverId, friendId))
+                .or()
+                .nested(nested -> nested.eq(ApplyFriend::getSenderId, friendId)
+                        .eq(ApplyFriend::getReceiverId, userId))
+        );
+        applyFriendMapper.delete(wrapper);
+    }
+
+    /**
+     * 删除好友关系记录（使用Lambda Wrapper）
+     *
+     * @param userId   用户ID
+     * @param friendId 好友ID
+     */
+    private int deleteFriendRecords(Long userId, Long friendId) {
+        LambdaQueryWrapper<Friend> wrapper = new LambdaQueryWrapper<>();
+        wrapper.and(w -> w
+                .nested(nested -> nested.eq(Friend::getUserId, userId)
+                        .eq(Friend::getFriendId, friendId))
+                .or()
+                .nested(nested -> nested.eq(Friend::getUserId, friendId)
+                        .eq(Friend::getFriendId, userId))
+        );
+        return friendMapper.delete(wrapper);
+    }
+
+
+    /**
+     * 删除会话记录（使用Lambda Wrapper）
+     *
+     * @param userId   用户ID
+     * @param friendId 好友ID
+     */
+    private void deleteSessionRecords(Long userId, Long friendId) {
+        // 1. 查找两个用户共同的单聊会话
+        LambdaQueryWrapper<UserSession> userSession1Wrapper = new LambdaQueryWrapper<>();
+        userSession1Wrapper.eq(UserSession::getUserId, userId);
+        List<UserSession> userSessions1 = userSessionMapper.selectList(userSession1Wrapper);
+
+        LambdaQueryWrapper<UserSession> userSession2Wrapper = new LambdaQueryWrapper<>();
+        userSession2Wrapper.eq(UserSession::getUserId, friendId);
+        List<UserSession> userSessions2 = userSessionMapper.selectList(userSession2Wrapper);
+
+        // 2. 找出共同的会话ID
+        List<Long> sessionIds1 = userSessions1.stream()
+                .map(UserSession::getSessionId)
+                .collect(Collectors.toList());
+        List<Long> sessionIds2 = userSessions2.stream()
+                .map(UserSession::getSessionId)
+                .collect(Collectors.toList());
+
+        sessionIds1.retainAll(sessionIds2);
+        List<Long> commonSessionIds = sessionIds1;
+
+        // 3. 筛选出单聊会话
+        if (!commonSessionIds.isEmpty()) {
+            LambdaQueryWrapper<Session> sessionWrapper = new LambdaQueryWrapper<>();
+            sessionWrapper.in(Session::getSessionId, commonSessionIds)
+                    .eq(Session::getType, SessionTypeConstant.SIGNAL_TYPE);
+            List<Session> sessions = sessionMapper.selectList(sessionWrapper);
+
+            List<Long> singleChatSessionIds = sessions.stream()
+                    .map(Session::getSessionId)
+                    .collect(Collectors.toList());
+
+            if (!singleChatSessionIds.isEmpty()) {
+                // 4. 删除用户会话关系
+                LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+                wrapper.in(UserSession::getSessionId, singleChatSessionIds);
+                userSessionMapper.delete(wrapper);
+
+                // 5. 删除会话
+                LambdaQueryWrapper<Session> sessionDeleteWrapper = new LambdaQueryWrapper<>();
+                sessionDeleteWrapper.in(Session::getSessionId, singleChatSessionIds);
+                sessionMapper.delete(sessionDeleteWrapper);
+            }
+        }
+    }
+
+    /**
+     * 清除好友关系缓存（双向）
+     * <p>
+     * 在好友关系发生变更时调用，确保缓存与数据库的一致性：
+     * - 拉黑好友后
+     * - 取消拉黑后
+     * - 删除好友后
+     *
+     * @param userId   用户 ID
+     * @param friendId 好友 ID
+     */
+    private void evictFriendCache(Long userId, Long friendId) {
+        try {
+            String key1 = FRIEND_STATUS_KEY_PREFIX + userId + ":" + friendId;
+            String key2 = FRIEND_STATUS_KEY_PREFIX + friendId + ":" + userId;
+            stringRedisTemplate.delete(Arrays.asList(key1, key2));
+            log.info("已清除好友关系缓存: {} <-> {}", userId, friendId);
+        } catch (Exception e) {
+            // 缓存清除失败不影响主流程，记录日志即可
+            log.warn("清除好友关系缓存失败: {} <-> {}, 原因: {}", userId, friendId, e.getMessage());
+        }
     }
 }

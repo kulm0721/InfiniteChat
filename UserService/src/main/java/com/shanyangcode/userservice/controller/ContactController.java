@@ -163,4 +163,32 @@ public class ContactController {
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }
+
+    /**
+     * 删除好友
+     *
+     * @param userId        用户ID
+     * @param friendId 删除的好友ID
+     * @return 是否成功
+     */
+    @DeleteMapping("/{userId}/friend/{friendId}")
+    public BaseResponse<?> deleteFriend(
+            @PathVariable String userId,
+            @PathVariable String friendId) {
+        try {
+            Long userIdL = Long.valueOf(userId);
+            Long friendIdL = Long.valueOf(friendId);
+            boolean result = friendService.deleteFriend(userIdL, friendIdL);
+            return ResultUtils.success(result);
+        } catch (NumberFormatException e) {
+            log.error("删除好友失败，用户ID格式错误，用户：{}，好友：{}", userId, friendId);
+            return ResultUtils.error(ErrorCode.PARAMS_ERROR, "用户ID格式错误");
+        } catch (BusinessException e) {
+            log.error("删除好友失败，用户：{}，好友：{}，原因：{}", userId, friendId, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("删除好友失败，用户：{}，好友：{}，原因：{}", userId, friendId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
 }

@@ -39,4 +39,19 @@ public interface FriendService extends IService<Friend> {
      * @return 分页的好友DTO列表
      */
     IPage<FriendDTO> getFriends(String userId, PageRequest pageRequest, String key);
+
+
+    /**
+     * 删除好友关系
+     * <p>
+     * 处理流程：
+     * 1. 删除双向好友关系
+     * 2. 删除相关的好友申请记录
+     * 3. 删除会话和用户会话关系
+     *
+     * @param userId   当前用户ID
+     * @param friendId 好友ID
+     * @return 删除是否成功
+     */
+    boolean deleteFriend(Long userId, Long friendId);
 }
