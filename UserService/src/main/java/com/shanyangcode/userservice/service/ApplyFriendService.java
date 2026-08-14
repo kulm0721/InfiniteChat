@@ -43,4 +43,13 @@ public interface ApplyFriendService extends IService<ApplyFriend> {
      * @return 申请DTO列表（包含userId、nickname、avatar、isReceiver等字段）
      */
     IPage<ApplyFriendDTO> getReceivedRequestsWithUserInfo(Long userId, PageRequest pageRequest);
+
+
+    /**
+     * 查询未读好友申请数量
+     *
+     * @param userId 用户ID
+     * @return 未读数量
+     */
+    int getUnreadCount(Long userId);
 }

@@ -17,6 +17,8 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/contact")
@@ -136,6 +138,28 @@ public class ContactController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("获取好友申请列表失败，用户ID：{}，原因：{}", userId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    /**
+     * 获取未读好友申请数量
+     *
+     * @param userId 用户ID
+     * @return 未读好友申请数量
+     */
+    @GetMapping("/{userId}/applyCount")
+    public BaseResponse<?> getUnreadApplyCount(@PathVariable Long userId) {
+        try {
+            int count = applyFriendService.getUnreadCount(userId);
+            HashMap<String, Integer> map = new HashMap<>();
+            map.put("count", count);
+            return ResultUtils.success(map);
+        } catch (BusinessException e) {
+            log.error("获取未读好友申请数量失败，用户ID：{}，原因：{}", userId, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("获取未读好友申请数量失败，用户ID：{}，原因：{}", userId, e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }

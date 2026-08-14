@@ -355,4 +355,23 @@ public class ApplyFriendServiceImpl extends ServiceImpl<ApplyFriendMapper, Apply
         return dtoList;
     }
 
+
+//-------------------------------------------------------------------------------------------
+    /**
+     * 查询未读好友申请数量
+     *
+     * @param userId 用户ID
+     * @return 未读数量
+     */
+    @Override
+    public int getUnreadCount(Long userId) {
+        ThrowUtils.throwIf(userId == null, ErrorCode.PARAMS_ERROR, "用户ID不能为空");
+
+        // 使用Lambda Wrapper统计
+        LambdaQueryWrapper<ApplyFriend> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ApplyFriend::getReceiverId, userId)
+                .eq(ApplyFriend::getStatus, FriendApplicationStatusEnum.UNREAD.getCode());
+
+        return Math.toIntExact(applyFriendMapper.selectCount(queryWrapper));
+    }
 }
