@@ -1,4 +1,4 @@
-package com.shanyangcode.userservice.controller;
+package com.shanyangcode.userservice.consumer;
 
 import cn.hutool.json.JSONUtil;
 import com.shanyangcode.common.constant.KafkaTopicConstant;

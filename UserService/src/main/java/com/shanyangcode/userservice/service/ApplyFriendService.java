@@ -1,10 +1,14 @@
 package com.shanyangcode.userservice.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.shanyangcode.userservice.model.dto.ApplyFriendDTO;
+import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.entity.ApplyFriend;
+
 /**
  * 好友申请服务接口
- *
+ * <p>
  * 功能说明：
  * - 管理好友申请的完整生命周期
  * - 支持申请、查询、状态修改等操作
@@ -18,9 +22,9 @@ public interface ApplyFriendService extends IService<ApplyFriend> {
      * 1. 验证发送者和接收者用户是否存在
      * 2. 检查是否已经是好友关系
      * 3. 检查是否已有待处理的申请
-     *   4a. 没有：插入新申请记录，同时异步发出 Kafka 通知（通知链路 + 过期链路）
-     *   4b. 有且已通过：返回"已是好友"
-     *   4c. 有但其它状态（已读 / 已拒绝 / 已过期）：复用记录、状态回写为 UNREAD、附言更新，同时异步发出 Kafka 通知（通知链路 + 过期链路）
+     * 4a. 没有：插入新申请记录，同时异步发出 Kafka 通知（通知链路 + 过期链路）
+     * 4b. 有且已通过：返回"已是好友"
+     * 4c. 有但其它状态（已读 / 已拒绝 / 已过期）：复用记录、状态回写为 UNREAD、附言更新，同时异步发出 Kafka 通知（通知链路 + 过期链路）
      * 5. 返回 applyFriendId
      *
      * @param senderId   发送者用户ID
@@ -29,5 +33,14 @@ public interface ApplyFriendService extends IService<ApplyFriend> {
      * @return 好友申请ID
      */
 
-    Long sendFriendRequest(Long senderId, Long receiverId,String message);
+    Long sendFriendRequest(Long senderId, Long receiverId, String message);
+
+    /**
+     * 查询用户收到的好友申请列表（返回DTO，包含用户信息）
+     *
+     * @param userId      用户ID
+     * @param pageRequest 分页参数
+     * @return 申请DTO列表（包含userId、nickname、avatar、isReceiver等字段）
+     */
+    IPage<ApplyFriendDTO> getReceivedRequestsWithUserInfo(Long userId, PageRequest pageRequest);
 }

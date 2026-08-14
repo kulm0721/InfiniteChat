@@ -5,6 +5,7 @@ import com.shanyangcode.common.common.BaseResponse;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.common.ResultUtils;
 import com.shanyangcode.common.exception.BusinessException;
+import com.shanyangcode.userservice.model.dto.ApplyFriendDTO;
 import com.shanyangcode.userservice.model.dto.FriendDTO;
 import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.dto.request.AddFriendRequest;
@@ -107,6 +108,34 @@ public class ContactController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("发送好友申请失败，发送者：{}，接收者：{}，原因：{}", userId, receiveuserId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+
+    /**
+     * 获取好友申请列表
+     *
+     * @param userId      用户ID
+     * @param pageRequest 分页参数
+     * @return 申请列表（分页）
+     */
+    @GetMapping("/{userId}/apply")
+    public BaseResponse<?> getApplyList(
+            @PathVariable Long userId,
+            PageRequest pageRequest) {
+        try {
+            //查询分页数据
+            IPage<ApplyFriendDTO> applyFriendDTOPage = applyFriendService.getReceivedRequestsWithUserInfo(
+                    userId, pageRequest);
+
+            // 使用 PageResponse 统一返回格式
+            return ResultUtils.success(PageResponse.of(applyFriendDTOPage));
+        } catch (BusinessException e) {
+            log.error("获取好友申请列表失败，用户ID：{}，原因：{}", userId, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("获取好友申请列表失败，用户ID：{}，原因：{}", userId, e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }
