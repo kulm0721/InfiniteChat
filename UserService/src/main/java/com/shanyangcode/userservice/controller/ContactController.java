@@ -288,4 +288,28 @@ public class ContactController {
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }
+
+
+    /**
+     * 获取好友详情
+     *
+     * @param userId   用户ID
+     * @param friendId 好友ID
+     * @return 好友详情
+     */
+    @GetMapping("/{userId}/friend/{friendId}")
+    public BaseResponse<?> getFriendDetail(
+            @PathVariable("userId") String userId,
+            @PathVariable("friendId") String friendId) {
+        try {
+            FriendDetailVO friendDetail = friendService.getFriendDetails(userId, friendId);
+            return ResultUtils.success(friendDetail);
+        } catch (BusinessException e) {
+            log.error("获取好友详情失败，用户：{}，好友：{}，原因：{}", userId, friendId, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("获取好友详情失败，用户：{}，好友：{}，原因：{}", userId, friendId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
 }
