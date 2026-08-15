@@ -565,4 +565,44 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
 
         return result;
     }
+
+
+    /**
+     * 取消拉黑好友
+     *
+     * @param userId   当前用户ID
+     * @param friendId 好友ID
+     * @return 更新是否成功
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean unblockFriend(Long userId, Long friendId) {
+        validateUserId(userId);
+        validateUserId(friendId);
+
+        // 1. 检查好友关系是否存在
+        LambdaQueryWrapper<Friend> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Friend::getUserId, userId)
+                .eq(Friend::getFriendId, friendId);
+        Friend friend = this.getOne(queryWrapper);
+
+        ThrowUtils.throwIf(friend == null, ErrorCode.NOT_FOUND_ERROR, "好友关系不存在");
+        ThrowUtils.throwIf(friend.getStatus() != FriendStatusEnum.BLOCKED.getCode(),
+                ErrorCode.OPERATION_ERROR, "该好友未被拉黑");
+
+        // 2. 使用Lambda Wrapper更新好友状态为正常（Friend表使用复合主键，不能使用updateById）
+        LambdaUpdateWrapper<Friend> updateWrapper =
+                new LambdaUpdateWrapper<>();
+        updateWrapper.set(Friend::getStatus, FriendStatusEnum.NORMAL.getCode())
+                .set(Friend::getUpdatedTime, LocalDateTime.now())
+                .eq(Friend::getUserId, userId)
+                .eq(Friend::getFriendId, friendId);
+
+        boolean result = this.update(updateWrapper);
+
+        // 3. 删除双向好友关系缓存
+        evictFriendCache(userId, friendId);
+
+        return result;
+    }
 }
