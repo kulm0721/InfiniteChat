@@ -8,15 +8,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.KafkaTopicConstant;
+import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.userservice.constant.FriendApplicationStatusEnum;
 import com.shanyangcode.userservice.constant.FriendStatusEnum;
 import com.shanyangcode.userservice.mapper.ApplyFriendMapper;
-import com.shanyangcode.userservice.model.dto.ApplyFriendDTO;
-import com.shanyangcode.userservice.model.dto.FriendApplicationNotificationDTO;
-import com.shanyangcode.userservice.model.dto.FriendRequestCreationEvent;
-import com.shanyangcode.userservice.model.dto.PageRequest;
+import com.shanyangcode.userservice.model.dto.*;
 import com.shanyangcode.userservice.model.entity.ApplyFriend;
 import com.shanyangcode.userservice.model.entity.Friend;
 import com.shanyangcode.userservice.model.entity.User;
@@ -375,4 +373,162 @@ public class ApplyFriendServiceImpl extends ServiceImpl<ApplyFriendMapper, Apply
 
         return Math.toIntExact(applyFriendMapper.selectCount(queryWrapper));
     }
+
+    //============================================================================================================
+
+    /**
+     * 修改好友申请状态
+     *
+     * @param receiverId 接收者用户ID
+     * @param senderIds  发送者用户ID列表
+     * @param status     目标状态码
+     * @return 通过申请时返回会话信息，其他情况返回null
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ModifyFriendApplicationResponse modifyApplicationStatus(Long receiverId, List<Long> senderIds, Integer status) {
+        ThrowUtils.throwIf(receiverId == null, ErrorCode.PARAMS_ERROR, "接收者ID不能为空");
+        ThrowUtils.throwIf(senderIds == null || senderIds.isEmpty(), ErrorCode.PARAMS_ERROR, "发送者ID列表不能为空");
+
+        // 验证状态值
+        FriendApplicationStatusEnum statusEnum = FriendApplicationStatusEnum.fromCode(status);
+
+        return switch (statusEnum) {
+            case ACCEPTED -> handleAcceptApplication(receiverId, senderIds);
+            case REJECTED -> handleRejectApplication(receiverId, senderIds);
+            case READ -> {
+                handleReadApplication(receiverId, senderIds);
+                yield null;
+            }
+            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "不允许修改为该状态值");
+        };
+    }
+
+
+    /**
+     * 处理拒绝好友申请
+     *
+     * @param receiverId 接收者用户ID
+     * @param senderIds  发送者用户ID列表
+     * @return null
+     */
+    @Transactional(rollbackFor = Exception.class)
+    protected ModifyFriendApplicationResponse handleRejectApplication(Long receiverId, List<Long> senderIds) {
+        ThrowUtils.throwIf(senderIds.size() != 1, ErrorCode.PARAMS_ERROR, "拒绝状态只能包含一个接受者");
+
+        Long senderId = senderIds.get(0);
+
+        // 查找申请记录
+        ApplyFriend targetApply = findApplyFriendBySenderAndReceiver(senderId, receiverId);
+        ThrowUtils.throwIf(targetApply == null, ErrorCode.NOT_FOUND_ERROR, "好友申请不存在");
+
+        //处理拒绝
+        handleFriendRequest(targetApply, receiverId, false);
+
+        return null;
+    }
+
+    /**
+     * 处理已读好友申请
+     *
+     * @param receiverId 接收者用户ID
+     * @param senderIds  发送者用户ID列表
+     */
+    @Transactional(rollbackFor = Exception.class)
+    protected void handleReadApplication(Long receiverId, List<Long> senderIds) {
+        // 使用Lambda Wrapper更新状态
+        LambdaUpdateWrapper<ApplyFriend> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.set(ApplyFriend::getStatus, FriendApplicationStatusEnum.READ.getCode())
+                .set(ApplyFriend::getUpdatedTime, LocalDateTime.now())
+                .eq(ApplyFriend::getReceiverId, receiverId)
+                .in(ApplyFriend::getSenderId, senderIds)
+                .eq(ApplyFriend::getStatus, FriendApplicationStatusEnum.UNREAD.getCode());
+
+        int updated = applyFriendMapper.update(null, updateWrapper);
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "标记已读失败");
+    }
+
+    /**
+     * 处理通过好友申请
+     *
+     * @param receiverId 接收者用户ID
+     * @param senderIds  发送者用户ID列表
+     * @return 会话信息
+     */
+    @Transactional(rollbackFor = Exception.class)
+    protected ModifyFriendApplicationResponse handleAcceptApplication(Long receiverId, List<Long> senderIds) {
+        ThrowUtils.throwIf(senderIds.size() != 1, ErrorCode.PARAMS_ERROR, "通过状态只能包含一个接收者");
+        Long senderId = senderIds.get(0);
+
+        // 查找申请记录
+        ApplyFriend targetApply = findApplyFriendBySenderAndReceiver(senderId, receiverId);
+        ThrowUtils.throwIf(targetApply == null, ErrorCode.NOT_FOUND_ERROR, "好友申请不存在");
+
+        // 处理好友申请，获取会话信息
+        ModifyFriendApplicationResponse response = handleFriendRequest(
+                targetApply, receiverId, true);
+        ThrowUtils.throwIf(response == null, ErrorCode.OPERATION_ERROR, "处理好友申请失败");
+
+        return response;
+    }
+
+    /**
+     * 根据发送者和接收者查找好友申请
+     *
+     * @param senderId   发送者用户ID
+     * @param receiverId 接收者用户ID
+     * @return 好友申请记录
+     */
+    private ApplyFriend findApplyFriendBySenderAndReceiver(Long senderId, Long receiverId) {
+        LambdaQueryWrapper<ApplyFriend> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ApplyFriend::getSenderId, senderId)
+                .eq(ApplyFriend::getReceiverId, receiverId);
+        return this.getOne(queryWrapper);
+    }
+
+    /**
+     * 处理好友申请（通过或拒绝）
+     * <p>
+     * 处理流程：
+     * 1. 验证申请是否存在且状态有效
+     * 2. 更新申请状态
+     * 3. 如果通过，创建好友关系和会话
+     * 4. 发送Kafka通知
+     *
+     * @param applyFriend 好友申请
+     * @param receiverId  接收者用户ID（用于权限验证）
+     * @param accept      true=通过，false=拒绝
+     * @return 通过时返回会话信息，拒绝时返回null
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ModifyFriendApplicationResponse handleFriendRequest(ApplyFriend applyFriend, Long receiverId, boolean accept) {
+        // 1. 验证权限（只有接收者可以处理申请）
+        ThrowUtils.throwIf(!applyFriend.getReceiverId().equals(receiverId),
+                ErrorCode.NO_AUTH_ERROR, "无权处理该好友申请");
+
+        // 2. 验证申请状态（只能处理未读或已读状态的申请）
+        boolean isValidStatus = applyFriend.getStatus().equals(FriendApplicationStatusEnum.UNREAD.getCode())
+                || applyFriend.getStatus().equals(FriendApplicationStatusEnum.READ.getCode());
+        ThrowUtils.throwIf(!isValidStatus, ErrorCode.OPERATION_ERROR, "该好友申请已处理或已过期");
+
+        // 3. 更新申请状态
+        LambdaUpdateWrapper<ApplyFriend> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.set(ApplyFriend::getStatus,
+                        accept ? FriendApplicationStatusEnum.ACCEPTED.getCode()
+                                : FriendApplicationStatusEnum.REJECTED.getCode())
+                .set(ApplyFriend::getUpdatedTime, LocalDateTime.now())
+                .eq(ApplyFriend::getApplyFriendId, applyFriend.getApplyFriendId());
+
+        boolean updated = this.update(updateWrapper);
+
+        // 4. 如果通过，创建好友关系和会话，并返回会话信息
+        if (accept && updated) {
+            User receiver = userService.getById(receiverId);
+            return friendService.addFriend(receiver, applyFriend.getSenderId());
+        }
+
+        // 5. 拒绝或更新失败时返回null
+        return null;
+    }
+
 }

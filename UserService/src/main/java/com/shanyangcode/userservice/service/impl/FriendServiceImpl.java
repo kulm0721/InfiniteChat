@@ -10,6 +10,7 @@ import com.shanyangcode.common.constant.CommonConstant;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.common.exception.ThrowUtils;
+import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.userservice.constant.FriendStatusEnum;
 import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.userservice.constant.UserStateEnum;
@@ -18,11 +19,12 @@ import com.shanyangcode.userservice.mapper.FriendMapper;
 import com.shanyangcode.userservice.mapper.SessionMapper;
 import com.shanyangcode.userservice.mapper.UserSessionMapper;
 import com.shanyangcode.userservice.model.dto.FriendDTO;
+import com.shanyangcode.userservice.model.dto.ModifyFriendApplicationResponse;
+import com.shanyangcode.userservice.model.dto.NewSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.entity.*;
 import com.shanyangcode.userservice.model.vo.FriendDetailVO;
-import com.shanyangcode.userservice.service.FriendService;
-import com.shanyangcode.userservice.service.UserService;
+import com.shanyangcode.userservice.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -30,10 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -44,25 +43,42 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
      * Redis Key 前缀（与 MessageValidationServiceImpl 保持一致）
      */
     private static final String FRIEND_STATUS_KEY_PREFIX = "msg:validate:friend:status:";
+    /**
+     * 会话用户角色常量
+     */
+    private static final int USER_ROLE_NORMAL = 2;
+    /**
+     * 会话状态常量
+     */
+    private static final int SESSION_STATUS_NORMAL = 0;
     private final UserService userService;
     private final SessionMapper sessionMapper;
     private final UserSessionMapper userSessionMapper;
     private final FriendMapper friendMapper;
     private final ApplyFriendMapper applyFriendMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final SessionService sessionService;
+    private final NotificationService notificationService;
+    private final UserSessionService userSessionService;
 
     public FriendServiceImpl(UserService userService,
                              SessionMapper sessionMapper,
                              UserSessionMapper userSessionMapper,
                              FriendMapper friendMapper,
                              ApplyFriendMapper applyFriendMapper,
-                             StringRedisTemplate stringRedisTemplate) {
+                             StringRedisTemplate stringRedisTemplate,
+                             SessionService sessionService,
+                             NotificationService notificationService,
+                             UserSessionService userSessionService) {
         this.userService = userService;
         this.sessionMapper = sessionMapper;
         this.userSessionMapper = userSessionMapper;
         this.friendMapper = friendMapper;
         this.applyFriendMapper = applyFriendMapper;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.sessionService = sessionService;
+        this.notificationService = notificationService;
+        this.userSessionService = userSessionService;
     }
 
     /**
@@ -604,5 +620,179 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         evictFriendCache(userId, friendId);
 
         return result;
+    }
+
+    /**
+     * 添加好友关系
+     * <p>
+     * 处理流程：
+     * 1. 验证用户存在性
+     * 2. 检查是否已是好友关系
+     * 3. 创建双向好友关系
+     * 4. 创建会话和用户会话关系
+     * 5. 发送Kafka通知
+     *
+     * @param recipient 接收好友请求的用户
+     * @param friendId  申请添加的好友ID
+     * @return ModifyFriendApplicationResponse 响应对象
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ModifyFriendApplicationResponse addFriend(User recipient, Long friendId) {
+        validateUserId(friendId);
+        ThrowUtils.throwIf(recipient == null, ErrorCode.NOT_FOUND_ERROR, "接收者用户不存在");
+
+        // 1. 验证申请者用户是否存在
+        User applicant = userService.getById(friendId);
+        ThrowUtils.throwIf(applicant == null, ErrorCode.NOT_FOUND_ERROR, "好友申请者不存在");
+
+        // 2. 检查是否已是好友关系
+        boolean exists = this.lambdaQuery()
+                .eq(Friend::getUserId, recipient.getUserId())
+                .eq(Friend::getFriendId, friendId)
+                .exists();
+        ThrowUtils.throwIf(exists, ErrorCode.OPERATION_ERROR, "已经是好友关系");
+
+        // 3. 创建双向好友关系
+        createFriendRelations(recipient.getUserId(), friendId);
+
+        // 4. 创建会话
+        Long sessionId = createSession();
+
+        // 5. 创建用户会话关系
+        createUserSessions(recipient.getUserId(), friendId, sessionId);
+
+        // 6. 发送Kafka通知给申请者
+        sendNewSessionNotification(friendId, recipient, sessionId);
+
+        // 7. 构建响应对象
+        return buildModifyFriendApplicationResponse(applicant, sessionId);
+    }
+
+
+    /**
+     * 创建双向好友关系
+     *
+     * @param userId   当前用户ID
+     * @param friendId 好友ID
+     */
+    private void createFriendRelations(Long userId, Long friendId) {
+        // 1. 创建第一条好友关系
+        Friend friend1 = new Friend();
+        friend1.setUserId(userId);
+        friend1.setFriendId(friendId);
+        friend1.setStatus(FriendStatusEnum.NORMAL.getCode());
+        friend1.setCreatedTime(LocalDateTime.now());
+        friend1.setUpdatedTime(LocalDateTime.now());
+
+        // 2. 创建第二条好友关系
+        Friend friend2 = new Friend();
+        friend2.setUserId(friendId);
+        friend2.setFriendId(userId);
+        friend2.setStatus(FriendStatusEnum.NORMAL.getCode());
+        friend2.setCreatedTime(LocalDateTime.now());
+        friend2.setUpdatedTime(LocalDateTime.now());
+
+        // 3. 使用Mapper的insert方法插入
+        int inserted1 = friendMapper.insert(friend1);
+        int inserted2 = friendMapper.insert(friend2);
+
+        ThrowUtils.throwIf(inserted1 <= 0 || inserted2 <= 0, ErrorCode.SYSTEM_ERROR, "添加好友关系失败");
+    }
+
+
+    /**
+     * 创建会话
+     *
+     * @return 会话ID
+     */
+
+    private Long createSession() {
+        Long sessionId = SnowflakeUtil.nextId();
+        Session session = new Session();
+        session.setSessionId(sessionId);
+        session.setName("");
+        session.setType(SessionTypeConstant.SIGNAL_TYPE);
+        session.setStatus(SESSION_STATUS_NORMAL);
+        session.setCreatedTime(new Date());
+        session.setUpdatedTime(new Date());
+
+        boolean sessionSaved = sessionService.save(session);
+        ThrowUtils.throwIf(!sessionSaved, ErrorCode.SYSTEM_ERROR, "创建会话失败");
+
+        return sessionId;
+    }
+
+
+    /**
+     * 创建用户会话关系
+     *
+     * @param userId    当前用户ID
+     * @param friendId  好友ID
+     * @param sessionId 会话ID
+     */
+    private void createUserSessions(Long userId, Long friendId, Long sessionId) {
+        // 1. 创建第一条用户会话关系
+        UserSession userSession1 = new UserSession();
+        userSession1.setUserId(userId);
+        userSession1.setSessionId(sessionId);
+        userSession1.setRole(USER_ROLE_NORMAL);
+        userSession1.setStatus(SESSION_STATUS_NORMAL);
+        userSession1.setCreatedTime(new Date());
+        userSession1.setUpdatedTime(new Date());
+
+        // 2. 创建第二条用户会话关系
+        UserSession userSession2 = new UserSession();
+        userSession2.setUserId(friendId);
+        userSession2.setSessionId(sessionId);
+        userSession2.setRole(USER_ROLE_NORMAL);
+        userSession2.setStatus(SESSION_STATUS_NORMAL);
+        userSession2.setCreatedTime(new Date());
+        userSession2.setUpdatedTime(new Date());
+
+        boolean userSessionSaved1 = userSessionService.save(userSession1);
+        boolean userSessionSaved2 = userSessionService.save(userSession2);
+
+        ThrowUtils.throwIf(!userSessionSaved1 || !userSessionSaved2,
+                ErrorCode.SYSTEM_ERROR, "创建用户会话关系失败");
+    }
+
+
+    /**
+     * 发送新会话通知（通过Kafka）
+     *
+     * @param recipientId 接收者ID
+     * @param sender      发送者用户对象
+     * @param sessionId   会话ID
+     */
+    private void sendNewSessionNotification(Long recipientId, User sender, Long sessionId) {
+        try {
+            NewSessionNotificationDTO notification = new NewSessionNotificationDTO();
+            notification.setSessionName(sender.getNickname());
+            notification.setAvatar(sender.getAvatar());
+
+            notificationService.pushNewSession(sender.getUserId(), recipientId, sessionId, SessionTypeConstant.SIGNAL_TYPE, notification);
+            log.info("发送新会话通知成功，接收者ID：{}，会话ID：{}", recipientId, sessionId);
+        } catch (Exception e) {
+            log.warn("发送新会话通知失败，接收者ID：{}，会话ID：{}，原因：{}",
+                    recipientId, sessionId, e.getMessage());
+        }
+    }
+
+    /**
+     * 构建 ModifyFriendApplicationResponse 响应对象
+     *
+     * @param applicant 申请者User实体
+     * @param sessionId 会话ID
+     * @return ModifyFriendApplicationResponse 对象
+     */
+    private ModifyFriendApplicationResponse buildModifyFriendApplicationResponse(User applicant, Long sessionId) {
+        ModifyFriendApplicationResponse response = new ModifyFriendApplicationResponse();
+        response.setUserId(String.valueOf(applicant.getUserId()));
+        response.setSessionId(String.valueOf(sessionId));
+        response.setSessionType(SessionTypeConstant.SIGNAL_TYPE);
+        response.setSessionName(applicant.getNickname());
+        response.setAvatar(applicant.getAvatar());
+        return response;
     }
 }

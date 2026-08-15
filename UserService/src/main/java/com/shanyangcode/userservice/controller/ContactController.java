@@ -7,8 +7,10 @@ import com.shanyangcode.common.common.ResultUtils;
 import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.userservice.model.dto.ApplyFriendDTO;
 import com.shanyangcode.userservice.model.dto.FriendDTO;
+import com.shanyangcode.userservice.model.dto.ModifyFriendApplicationResponse;
 import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.dto.request.AddFriendRequest;
+import com.shanyangcode.userservice.model.dto.request.ModifyFriendApplicationRequest;
 import com.shanyangcode.userservice.model.vo.FriendDetailVO;
 import com.shanyangcode.userservice.model.vo.PageResponse;
 import com.shanyangcode.userservice.service.ApplyFriendService;
@@ -18,6 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -246,6 +250,41 @@ public class ContactController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("取消拉黑好友失败，用户：{}，好友：{}，原因：{}", userId, friendId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+
+    /**
+     * 修改好友申请状态
+     *
+     * @param userId  用户ID
+     * @param status  状态（1:通过、2:拒绝、3:已读）
+     * @param request 用户ID列表
+     * @return 响应结果
+     */
+    @PostMapping("/{userId}/application/{status}")
+    public BaseResponse<?> modifyFriendApplicationStatus(
+            @PathVariable("userId") String userId,
+            @PathVariable("status") Integer status,
+            @Valid @RequestBody ModifyFriendApplicationRequest request) {
+        try {
+            Long receiverId = Long.valueOf(userId);
+            List<Long> senderIds = request.getReceiveuserIds().stream().map(Long::valueOf).collect(Collectors.toList());
+            ModifyFriendApplicationResponse response = applyFriendService.modifyApplicationStatus(receiverId, senderIds, status);
+            // 通过申请时返回会话信息，其他情况返回true
+            return ResultUtils.success(response != null ? response : true);
+        } catch (NumberFormatException e) {
+            log.error("修改好友申请状态失败，用户ID格式错误，用户：{}", userId);
+            return ResultUtils.error(ErrorCode.PARAMS_ERROR, "用户ID格式错误");
+        } catch (IllegalArgumentException e) {
+            log.error("修改好友申请状态失败，状态值无效，用户：{}，状态：{}", userId, status);
+            return ResultUtils.error(ErrorCode.PARAMS_ERROR, "不允许修改为该状态值");
+        } catch (BusinessException e) {
+            log.error("修改好友申请状态失败，用户：{}，状态：{}，原因：{}", userId, status, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("修改好友申请状态失败，用户：{}，状态：{}，原因：{}", userId, status, e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }
