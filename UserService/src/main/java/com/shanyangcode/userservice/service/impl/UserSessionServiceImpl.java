@@ -28,4 +28,12 @@ public class UserSessionServiceImpl extends ServiceImpl<UserSessionMapper, UserS
         List<UserSession> userSessions = this.list(queryWrapper);
         return userSessions.stream().map(UserSession::getSessionId).collect(Collectors.toList());
     }
+
+    @Override
+    public int getGroupMemberCount(Long sessionId) {
+        QueryWrapper<UserSession> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("session_id", sessionId);
+        queryWrapper.eq("status", 0); // 仅统计正常成员
+        return (int) this.count(queryWrapper);
+    }
 }

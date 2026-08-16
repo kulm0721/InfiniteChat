@@ -5,7 +5,10 @@ import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.common.ResultUtils;
 import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.userservice.model.dto.request.CreateGroupRequest;
+import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
 import com.shanyangcode.userservice.model.dto.response.CreateGroupResponse;
+import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
+import com.shanyangcode.userservice.service.GroupService;
 import com.shanyangcode.userservice.service.SessionService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -19,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("api/group")
 public class GroupController {
     private final SessionService sessionService;
+    private final GroupService groupService;
 
-    public GroupController(SessionService sessionService) {
+    public GroupController(SessionService sessionService, GroupService groupService) {
         this.sessionService = sessionService;
+        this.groupService = groupService;
     }
 
     @PostMapping
@@ -34,6 +39,20 @@ public class GroupController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("创建群聊失败，原因：{}", e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    @PostMapping("/invite")
+    public BaseResponse<?> inviteGroup(@Valid @RequestBody InviteGroupRequest request) {
+        try {
+            InviteGroupResponse response = groupService.inviteGroup(request);
+            return ResultUtils.success(response);
+        } catch (BusinessException e) {
+            log.error("群聊邀请失败，原因：{}", e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("群聊邀请失败，原因：{}", e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }
