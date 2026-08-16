@@ -3,8 +3,10 @@ package com.shanyangcode.userservice.service.impl;
 import cn.hutool.json.JSONUtil;
 import com.shanyangcode.common.constant.KafkaTopicConstant;
 import com.shanyangcode.common.constant.MessageTypeConstant;
+import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.userservice.model.dto.FriendApplicationNotificationDTO;
+import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.NewSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.SystemNotificationMessage;
 import com.shanyangcode.userservice.service.NotificationService;
@@ -144,6 +146,33 @@ public class NotificationServiceImpl implements NotificationService {
             sendNotification(message, "新会话通知");
         } catch (Exception e) {
             log.error("发送新会话通知失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, sessionId, e.getMessage(), e);
+        }
+    }
+
+
+    @Override
+    public void pushGroupNewSession(Long userId, Long sessionId, NewGroupSessionNotificationDTO notification) {
+        try {
+            SystemNotificationMessage message = new SystemNotificationMessage();
+            message.setMessageId(generateMessageId());
+            message.setSessionId(sessionId);
+            message.setSenderId(null);  //系统消息
+            message.setReceiverId(userId);
+            message.setType(MessageTypeConstant.TYPE_SYSTEM_NEW_GROUP_SESSION); //103
+            message.setSessionType(SessionTypeConstant.GROUP_TYPE);
+            message.setTimestamp(System.currentTimeMillis());
+
+            // 构建body
+            Map<String, Object> body = new HashMap<>();
+            body.put("sessionName", notification.getSessionName());
+            body.put("avatar", notification.getAvatar());
+            body.put("creatorId", notification.getCreatorId());
+            body.put("membersCount", notification.getMembersCount());
+            message.setBody(body);
+
+            sendNotification(message, "群组邀请通知");
+        } catch (Exception e) {
+            log.error("发送新群聊会话通知失败， 用户ID: {},  会话ID: {}, 错误: {}", userId, sessionId, e.getMessage(), e);
         }
     }
 }

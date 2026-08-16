@@ -1,6 +1,7 @@
 package com.shanyangcode.userservice.service;
 
 import com.shanyangcode.userservice.model.dto.FriendApplicationNotificationDTO;
+import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.NewSessionNotificationDTO;
 
 /**
@@ -14,7 +15,6 @@ import com.shanyangcode.userservice.model.dto.NewSessionNotificationDTO;
  */
 public interface NotificationService {
     /**
-     *
      * 推送好友申请通知
      * <p>
      * 场景：用户收到新的好友申请
@@ -36,4 +36,7 @@ public interface NotificationService {
      * @param notification 新会话通知信息（包含sessionName和avatar）
      */
     void pushNewSession(Long senderId, Long userId, Long sessionId, Integer sessionType, NewSessionNotificationDTO notification);
+
+
+    void pushGroupNewSession(Long userId, Long sessionId, NewGroupSessionNotificationDTO notification);
 }

@@ -43,4 +43,9 @@ public class Session {
      * 更新时间
      */
     private Date updatedTime;
+
+    /**
+     * 会话头像
+     */
+    private String avatar;
 }
