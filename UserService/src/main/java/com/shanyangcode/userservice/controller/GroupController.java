@@ -15,8 +15,10 @@ import com.shanyangcode.userservice.model.vo.PageResponse;
 import com.shanyangcode.userservice.model.dto.response.CreateGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
+import com.shanyangcode.userservice.model.dto.response.GroupMemberCountResponse;
 import com.shanyangcode.userservice.service.GroupService;
 import com.shanyangcode.userservice.service.SessionService;
+import com.shanyangcode.userservice.service.UserSessionService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,10 +34,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class GroupController {
     private final SessionService sessionService;
     private final GroupService groupService;
+    private final UserSessionService userSessionService;
 
-    public GroupController(SessionService sessionService, GroupService groupService) {
+    public GroupController(SessionService sessionService, GroupService groupService,
+                           UserSessionService userSessionService) {
         this.sessionService = sessionService;
         this.groupService = groupService;
+        this.userSessionService = userSessionService;
     }
 
     @PostMapping
@@ -121,6 +126,20 @@ public class GroupController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("获取用户群聊列表失败，userId：{}，原因：{}", userId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    @GetMapping("/{sessionId}/count")
+    public BaseResponse<?> getGroupMemberCount(@PathVariable("sessionId") Long sessionId) {
+        try {
+            int count = userSessionService.getGroupMemberCount(sessionId);
+            return ResultUtils.success(new GroupMemberCountResponse(count));
+        } catch (BusinessException e) {
+            log.error("获取群聊人数失败，sessionId：{}，原因：{}", sessionId, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("获取群聊人数失败，sessionId：{}，原因：{}", sessionId, e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }
