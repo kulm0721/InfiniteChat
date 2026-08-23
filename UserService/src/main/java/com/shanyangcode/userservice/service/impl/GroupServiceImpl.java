@@ -4,19 +4,23 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
+import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.userservice.constant.FriendStatusEnum;
 import com.shanyangcode.userservice.mapper.FriendMapper;
 import com.shanyangcode.userservice.mapper.SessionMapper;
 import com.shanyangcode.userservice.mapper.UserSessionMapper;
+import com.shanyangcode.userservice.mapper.UserMapper;
 import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.GroupKickNotificationDTO;
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
+import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
 import com.shanyangcode.userservice.model.entity.Friend;
 import com.shanyangcode.userservice.model.entity.Session;
 import com.shanyangcode.userservice.model.entity.UserSession;
+import com.shanyangcode.userservice.model.entity.User;
 import com.shanyangcode.userservice.service.GroupService;
 import com.shanyangcode.userservice.service.NotificationService;
 import com.shanyangcode.userservice.service.UserSessionService;
@@ -30,6 +34,7 @@ import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 @Service
@@ -55,17 +60,20 @@ public class GroupServiceImpl implements GroupService {
 
     private final SessionMapper sessionMapper;
     private final UserSessionMapper userSessionMapper;
+    private final UserMapper userMapper;
     private final FriendMapper friendMapper;
     private final NotificationService notificationService;
     private final UserSessionService userSessionService;
 
     public GroupServiceImpl(SessionMapper sessionMapper,
                             UserSessionMapper userSessionMapper,
+                            UserMapper userMapper,
                             FriendMapper friendMapper,
                             NotificationService notificationService,
                             UserSessionService userSessionService) {
         this.sessionMapper = sessionMapper;
         this.userSessionMapper = userSessionMapper;
+        this.userMapper = userMapper;
         this.friendMapper = friendMapper;
         this.notificationService = notificationService;
         this.userSessionService = userSessionService;
@@ -222,6 +230,71 @@ public class GroupServiceImpl implements GroupService {
             } catch (Exception e) {
                 log.error("推送踢出通知失败，接收者ID: {}, 会话ID: {}, 错误: {}",
                         receiverId, sessionId, e.getMessage(), e);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean exitGroup(GroupExitRequestDTO request) {
+        Long sessionId = request.getSessionId();
+        Long userId = request.getUserId();
+
+        validateExitGroupParameters(sessionId, userId);
+        validateUser(userId);
+        validateSession(sessionId);
+
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .eq(UserSession::getUserId, userId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        UserSession userSession = userSessionMapper.selectOne(wrapper);
+        ThrowUtils.throwIf(userSession == null, ErrorCode.OPERATION_ERROR, "您不在该群聊中");
+        if (userSession.getRole() == USER_ROLE_GROUP_OWNER) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR,
+                    "群主不能直接退出群聊，请先转让群主或解散群");
+        }
+
+        LambdaQueryWrapper<UserSession> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(UserSession::getUserId, userId)
+                .eq(UserSession::getSessionId, sessionId);
+        int deleted = userSessionMapper.delete(deleteWrapper);
+        ThrowUtils.throwIf(deleted <= 0, ErrorCode.SYSTEM_ERROR, "退出群聊失败");
+
+        pushExitNotification(sessionId, userId);
+        return true;
+    }
+
+    private void validateExitGroupParameters(Long sessionId, Long userId) {
+        ThrowUtils.throwIf(sessionId == null, ErrorCode.PARAMS_ERROR, "会话ID不能为空");
+        ThrowUtils.throwIf(userId == null, ErrorCode.PARAMS_ERROR, "用户ID不能为空");
+    }
+
+    private void validateUser(Long userId) {
+        User user = userMapper.selectById(userId);
+        ThrowUtils.throwIf(user == null || (user.getIsDelete() != null && user.getIsDelete() == 1)
+                        || (user.getState() != null && user.getState() != 0),
+                ErrorCode.USER_NOT_EXISTS, "用户不存在或状态异常");
+    }
+
+    private void pushExitNotification(Long sessionId, Long exitUserId) {
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        List<UserSession> remainingMembers = userSessionMapper.selectList(wrapper);
+        if (remainingMembers.isEmpty()) {
+            return;
+        }
+
+        GroupKickNotificationDTO notification = new GroupKickNotificationDTO();
+        notification.setMemberIds(Collections.singletonList(exitUserId));
+        notification.setOperatorId(null);
+        for (UserSession member : remainingMembers) {
+            try {
+                notificationService.pushGroupKickNotification(member.getUserId(), sessionId, notification);
+            } catch (Exception e) {
+                log.error("推送退出通知失败，接收者ID: {}, 会话ID: {}, 错误: {}",
+                        member.getUserId(), sessionId, e.getMessage(), e);
             }
         }
     }

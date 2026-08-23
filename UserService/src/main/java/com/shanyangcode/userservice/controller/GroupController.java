@@ -7,6 +7,7 @@ import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.userservice.model.dto.request.CreateGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
+import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
 import com.shanyangcode.userservice.model.dto.response.CreateGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
@@ -70,6 +71,20 @@ public class GroupController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("踢出群成员失败，原因：{}", e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    @PostMapping("/exit")
+    public BaseResponse<?> exitGroup(@Valid @RequestBody GroupExitRequestDTO request) {
+        try {
+            boolean success = groupService.exitGroup(request);
+            return ResultUtils.success(success);
+        } catch (BusinessException e) {
+            log.error("退出群聊失败，原因：{}", e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("退出群聊失败，原因：{}", e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }

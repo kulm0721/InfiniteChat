@@ -2,6 +2,7 @@ package com.shanyangcode.userservice.service;
 
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
+import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
 
@@ -15,4 +16,6 @@ public interface GroupService {
     InviteGroupResponse inviteGroup(InviteGroupRequest request);
 
     KickGroupMembersResponse kickGroupMembers(KickGroupMembersRequest request);
+
+    boolean exitGroup(GroupExitRequestDTO request);
 }
