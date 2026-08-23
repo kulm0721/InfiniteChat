@@ -1,6 +1,7 @@
 package com.shanyangcode.userservice.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
@@ -12,6 +13,8 @@ import com.shanyangcode.userservice.mapper.UserSessionMapper;
 import com.shanyangcode.userservice.mapper.UserMapper;
 import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.GroupKickNotificationDTO;
+import com.shanyangcode.userservice.model.dto.GroupMemberDTO;
+import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
@@ -21,6 +24,7 @@ import com.shanyangcode.userservice.model.entity.Friend;
 import com.shanyangcode.userservice.model.entity.Session;
 import com.shanyangcode.userservice.model.entity.UserSession;
 import com.shanyangcode.userservice.model.entity.User;
+import com.shanyangcode.userservice.model.vo.PageResponse;
 import com.shanyangcode.userservice.service.GroupService;
 import com.shanyangcode.userservice.service.NotificationService;
 import com.shanyangcode.userservice.service.UserSessionService;
@@ -33,6 +37,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
@@ -297,6 +302,50 @@ public class GroupServiceImpl implements GroupService {
                         member.getUserId(), sessionId, e.getMessage(), e);
             }
         }
+    }
+
+    @Override
+    public PageResponse<GroupMemberDTO> getGroupMembers(Long sessionId, PageRequest pageRequest) {
+        ThrowUtils.throwIf(sessionId == null || sessionId <= 0,
+                ErrorCode.PARAMS_ERROR, "会话ID不能为空");
+        if (pageRequest == null) {
+            pageRequest = new PageRequest();
+        }
+        validateSession(sessionId);
+
+        Page<UserSession> page = pageRequest.toPage();
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        Page<UserSession> userSessionPage = userSessionMapper.selectPage(page, wrapper);
+
+        List<Long> userIds = userSessionPage.getRecords().stream()
+                .map(UserSession::getUserId).collect(Collectors.toList());
+        Map<Long, User> userMap = userIds.isEmpty() ? new HashMap<>()
+                : userMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(User::getUserId, user -> user));
+        List<GroupMemberDTO> members = userSessionPage.getRecords().stream()
+                .map(userSession -> {
+                    User user = userMap.get(userSession.getUserId());
+                    if (user == null) {
+                        return null;
+                    }
+                    GroupMemberDTO member = new GroupMemberDTO();
+                    member.setUserId(String.valueOf(user.getUserId()));
+                    member.setNickname(user.getNickname());
+                    member.setAvatar(user.getAvatar());
+                    return member;
+                }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
+
+        return PageResponse.<GroupMemberDTO>builder()
+                .list(members)
+                .total(userSessionPage.getTotal())
+                .pageSize(userSessionPage.getSize())
+                .pageNum(userSessionPage.getCurrent())
+                .pages(userSessionPage.getPages())
+                .hasNext(userSessionPage.getCurrent() < userSessionPage.getPages())
+                .hasPrevious(userSessionPage.getCurrent() > 1)
+                .build();
     }
 
     private List<Long> validateInviteGroupParameters(Long sessionId, Long inviterId, List<Long> inviteeIds) {
