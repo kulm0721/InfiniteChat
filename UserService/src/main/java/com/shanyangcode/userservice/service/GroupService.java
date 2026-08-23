@@ -1,7 +1,9 @@
 package com.shanyangcode.userservice.service;
 
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
+import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
+import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
 
 /**
  * 群组服务接口
@@ -11,4 +13,6 @@ import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
  */
 public interface GroupService {
     InviteGroupResponse inviteGroup(InviteGroupRequest request);
+
+    KickGroupMembersResponse kickGroupMembers(KickGroupMembersRequest request);
 }

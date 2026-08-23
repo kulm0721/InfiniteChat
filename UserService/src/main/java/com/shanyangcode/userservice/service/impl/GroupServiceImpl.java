@@ -9,8 +9,11 @@ import com.shanyangcode.userservice.mapper.FriendMapper;
 import com.shanyangcode.userservice.mapper.SessionMapper;
 import com.shanyangcode.userservice.mapper.UserSessionMapper;
 import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
+import com.shanyangcode.userservice.model.dto.GroupKickNotificationDTO;
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
+import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
+import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
 import com.shanyangcode.userservice.model.entity.Friend;
 import com.shanyangcode.userservice.model.entity.Session;
 import com.shanyangcode.userservice.model.entity.UserSession;
@@ -24,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -107,6 +112,118 @@ public class GroupServiceImpl implements GroupService {
         log.info("群聊邀请完成，sessionId: {}, 成功: {}, 失败: {}",
                 sessionId, successIds.size(), failedIds.size());
         return response;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public KickGroupMembersResponse kickGroupMembers(KickGroupMembersRequest request) {
+        Long sessionId;
+        try {
+            sessionId = Long.valueOf(request.getSessionId());
+        } catch (NumberFormatException e) {
+            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "会话ID格式错误");
+            return null;
+        }
+        Long operatorId = request.getOperatorId();
+        List<Long> memberIds = request.getMemberIds();
+
+        validateKickGroupParameters(sessionId, operatorId, memberIds);
+        validateSession(sessionId);
+
+        UserSession operatorSession = getOperatorSession(sessionId, operatorId);
+        int operatorRole = operatorSession.getRole();
+        List<UserSession> targetMembers = getTargetMembers(sessionId, memberIds);
+        Map<Long, UserSession> memberMap = targetMembers.stream()
+                .collect(Collectors.toMap(UserSession::getUserId, us -> us));
+
+        List<String> successIds = new ArrayList<>();
+        for (Long memberId : memberIds) {
+            UserSession targetMember = memberMap.get(memberId);
+            if (targetMember == null) {
+                log.warn("成员ID {} 不在群聊中，跳过", memberId);
+                continue;
+            }
+            if (targetMember.getRole() == USER_ROLE_GROUP_OWNER) {
+                log.warn("不能踢出群主，成员ID: {}", memberId);
+                continue;
+            }
+            if (operatorRole == USER_ROLE_GROUP_ADMIN
+                    && targetMember.getRole() != USER_ROLE_GROUP_MEMBER) {
+                log.warn("管理员只能踢出普通成员，成员ID: {}, 角色: {}",
+                        memberId, targetMember.getRole());
+                continue;
+            }
+
+            try {
+                LambdaQueryWrapper<UserSession> deleteWrapper = new LambdaQueryWrapper<>();
+                deleteWrapper.eq(UserSession::getUserId, memberId)
+                        .eq(UserSession::getSessionId, sessionId);
+                userSessionMapper.delete(deleteWrapper);
+                successIds.add(String.valueOf(memberId));
+            } catch (Exception e) {
+                log.error("踢出群成员失败，成员ID: {}，错误信息：{}", memberId, e.getMessage(), e);
+            }
+        }
+
+        if (!successIds.isEmpty()) {
+            pushKickNotification(sessionId, operatorId, successIds);
+        }
+
+        KickGroupMembersResponse response = new KickGroupMembersResponse();
+        response.setSuccessIds(successIds);
+        return response;
+    }
+
+    private void validateKickGroupParameters(Long sessionId, Long operatorId, List<Long> memberIds) {
+        ThrowUtils.throwIf(sessionId == null, ErrorCode.PARAMS_ERROR, "会话ID不能为空");
+        ThrowUtils.throwIf(operatorId == null, ErrorCode.PARAMS_ERROR, "操作者ID不能为空");
+        ThrowUtils.throwIf(memberIds == null || memberIds.isEmpty(),
+                ErrorCode.PARAMS_ERROR, "被踢出成员ID列表不能为空");
+        ThrowUtils.throwIf(memberIds.stream().anyMatch(id -> id == null),
+                ErrorCode.PARAMS_ERROR, "被踢出成员ID不能为空");
+    }
+
+    private UserSession getOperatorSession(Long sessionId, Long operatorId) {
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .eq(UserSession::getUserId, operatorId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        UserSession operatorSession = userSessionMapper.selectOne(wrapper);
+        ThrowUtils.throwIf(operatorSession == null, ErrorCode.NO_AUTH_ERROR, "您不在该群聊中");
+        ThrowUtils.throwIf(operatorSession.getRole() != USER_ROLE_GROUP_OWNER
+                        && operatorSession.getRole() != USER_ROLE_GROUP_ADMIN,
+                ErrorCode.NO_AUTH_ERROR, "只有群主或管理员才能踢出群成员");
+        return operatorSession;
+    }
+
+    private List<UserSession> getTargetMembers(Long sessionId, List<Long> memberIds) {
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .in(UserSession::getUserId, memberIds)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        return userSessionMapper.selectList(wrapper);
+    }
+
+    private void pushKickNotification(Long sessionId, Long operatorId, List<String> kickedIds) {
+        List<Long> kickedMemberIds = kickedIds.stream().map(Long::valueOf).collect(Collectors.toList());
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        Set<Long> receiverIds = userSessionMapper.selectList(wrapper).stream()
+                .map(UserSession::getUserId).collect(Collectors.toCollection(HashSet::new));
+        receiverIds.addAll(kickedMemberIds);
+
+        GroupKickNotificationDTO notification = new GroupKickNotificationDTO();
+        notification.setMemberIds(kickedMemberIds);
+        notification.setOperatorId(operatorId);
+        for (Long receiverId : receiverIds) {
+            try {
+                notificationService.pushGroupKickNotification(receiverId, sessionId, notification);
+            } catch (Exception e) {
+                log.error("推送踢出通知失败，接收者ID: {}, 会话ID: {}, 错误: {}",
+                        receiverId, sessionId, e.getMessage(), e);
+            }
+        }
     }
 
     private List<Long> validateInviteGroupParameters(Long sessionId, Long inviterId, List<Long> inviteeIds) {

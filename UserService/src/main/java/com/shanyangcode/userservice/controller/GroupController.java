@@ -6,8 +6,10 @@ import com.shanyangcode.common.common.ResultUtils;
 import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.userservice.model.dto.request.CreateGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
+import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.response.CreateGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
+import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
 import com.shanyangcode.userservice.service.GroupService;
 import com.shanyangcode.userservice.service.SessionService;
 import jakarta.validation.Valid;
@@ -53,6 +55,21 @@ public class GroupController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("群聊邀请失败，原因：{}", e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    @PostMapping("/kick")
+    public BaseResponse<?> kickGroupMembers(
+            @Valid @RequestBody KickGroupMembersRequest request) {
+        try {
+            KickGroupMembersResponse response = groupService.kickGroupMembers(request);
+            return ResultUtils.success(response);
+        } catch (BusinessException e) {
+            log.error("踢出群成员失败，原因：{}", e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("踢出群成员失败，原因：{}", e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }

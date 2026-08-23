@@ -1,6 +1,7 @@
 package com.shanyangcode.userservice.service;
 
 import com.shanyangcode.userservice.model.dto.FriendApplicationNotificationDTO;
+import com.shanyangcode.userservice.model.dto.GroupKickNotificationDTO;
 import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.NewSessionNotificationDTO;
 
@@ -39,4 +40,6 @@ public interface NotificationService {
 
 
     void pushGroupNewSession(Long userId, Long sessionId, NewGroupSessionNotificationDTO notification);
+
+    void pushGroupKickNotification(Long userId, Long sessionId, GroupKickNotificationDTO notification);
 }

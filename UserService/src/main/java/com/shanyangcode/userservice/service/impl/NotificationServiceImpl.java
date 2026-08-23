@@ -6,6 +6,7 @@ import com.shanyangcode.common.constant.MessageTypeConstant;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.userservice.model.dto.FriendApplicationNotificationDTO;
+import com.shanyangcode.userservice.model.dto.GroupKickNotificationDTO;
 import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.NewSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.SystemNotificationMessage;
@@ -173,6 +174,29 @@ public class NotificationServiceImpl implements NotificationService {
             sendNotification(message, "群组邀请通知");
         } catch (Exception e) {
             log.error("发送新群聊会话通知失败， 用户ID: {},  会话ID: {}, 错误: {}", userId, sessionId, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void pushGroupKickNotification(Long userId, Long sessionId, GroupKickNotificationDTO notification) {
+        try {
+            SystemNotificationMessage message = new SystemNotificationMessage();
+            message.setMessageId(generateMessageId());
+            message.setSessionId(sessionId);
+            message.setSenderId(notification.getOperatorId());
+            message.setReceiverId(userId);
+            message.setType(MessageTypeConstant.TYPE_SYSTEM_GROUP_KICK);
+            message.setSessionType(SessionTypeConstant.GROUP_TYPE);
+            message.setTimestamp(System.currentTimeMillis());
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("memberIds", notification.getMemberIds());
+            body.put("operatorId", notification.getOperatorId());
+            message.setBody(body);
+            sendNotification(message, "群聊踢出通知");
+        } catch (Exception e) {
+            log.error("发送群聊踢出通知失败，用户ID: {}, 会话ID: {}, 错误: {}",
+                    userId, sessionId, e.getMessage(), e);
         }
     }
 }
