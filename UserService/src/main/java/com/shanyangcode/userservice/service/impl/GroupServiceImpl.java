@@ -1,6 +1,7 @@
 package com.shanyangcode.userservice.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.SessionTypeConstant;
@@ -432,15 +433,20 @@ public class GroupServiceImpl implements GroupService {
         if (sessionIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return sessionIds.stream().collect(Collectors.toMap(sessionId -> sessionId,
-                this::countGroupMembers));
-    }
-
-    private Integer countGroupMembers(Long sessionId) {
-        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserSession::getSessionId, sessionId)
-                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
-        return Math.toIntExact(userSessionMapper.selectCount(wrapper));
+        Map<Long, Integer> result = new HashMap<>();
+        QueryWrapper<UserSession> wrapper = new QueryWrapper<>();
+        wrapper.select("session_id", "COUNT(*) AS member_count")
+                .in("session_id", sessionIds)
+                .eq("status", SESSION_STATUS_NORMAL)
+                .groupBy("session_id");
+        for (Map<String, Object> row : userSessionMapper.selectMaps(wrapper)) {
+            Object sessionId = row.get("session_id");
+            Object memberCount = row.get("member_count");
+            if (sessionId != null && memberCount instanceof Number) {
+                result.put(Long.valueOf(sessionId.toString()), ((Number) memberCount).intValue());
+            }
+        }
+        return result;
     }
 
     private UserGroupDTO convertToUserGroupDTO(UserSession userSession, Session session,
