@@ -10,6 +10,7 @@ import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
 import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.dto.GroupMemberDTO;
+import com.shanyangcode.userservice.model.dto.UserGroupDTO;
 import com.shanyangcode.userservice.model.vo.PageResponse;
 import com.shanyangcode.userservice.model.dto.response.CreateGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
@@ -105,6 +106,21 @@ public class GroupController {
             return ResultUtils.error(e.getCode(), e.getMessage());
         } catch (Exception e) {
             log.error("获取群成员失败，sessionId：{}，原因：{}", sessionId, e.getMessage(), e);
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    @GetMapping("/user/{userId}")
+    public BaseResponse<?> getUserGroups(@PathVariable("userId") Long userId,
+                                         @Valid PageRequest pageRequest) {
+        try {
+            PageResponse<UserGroupDTO> response = groupService.getUserGroups(userId, pageRequest);
+            return ResultUtils.success(response);
+        } catch (BusinessException e) {
+            log.error("获取用户群聊列表失败，userId：{}，原因：{}", userId, e.getMessage());
+            return ResultUtils.error(e.getCode(), e.getMessage());
+        } catch (Exception e) {
+            log.error("获取用户群聊列表失败，userId：{}，原因：{}", userId, e.getMessage(), e);
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
     }

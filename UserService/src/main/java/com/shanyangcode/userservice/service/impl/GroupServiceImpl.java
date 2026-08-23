@@ -15,6 +15,7 @@ import com.shanyangcode.userservice.model.dto.NewGroupSessionNotificationDTO;
 import com.shanyangcode.userservice.model.dto.GroupKickNotificationDTO;
 import com.shanyangcode.userservice.model.dto.GroupMemberDTO;
 import com.shanyangcode.userservice.model.dto.PageRequest;
+import com.shanyangcode.userservice.model.dto.UserGroupDTO;
 import com.shanyangcode.userservice.model.dto.request.InviteGroupRequest;
 import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.Collections;
+import java.text.SimpleDateFormat;
 import java.util.stream.Collectors;
 
 @Service
@@ -346,6 +348,119 @@ public class GroupServiceImpl implements GroupService {
                 .hasNext(userSessionPage.getCurrent() < userSessionPage.getPages())
                 .hasPrevious(userSessionPage.getCurrent() > 1)
                 .build();
+    }
+
+    @Override
+    public PageResponse<UserGroupDTO> getUserGroups(Long userId, PageRequest pageRequest) {
+        ThrowUtils.throwIf(userId == null || userId <= 0,
+                ErrorCode.PARAMS_ERROR, "用户ID不能为空");
+        if (pageRequest == null) {
+            pageRequest = new PageRequest();
+        }
+
+        LambdaQueryWrapper<UserSession> userSessionWrapper = new LambdaQueryWrapper<>();
+        userSessionWrapper.eq(UserSession::getUserId, userId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL)
+                .select(UserSession::getSessionId);
+        List<UserSession> userSessions = userSessionMapper.selectList(userSessionWrapper);
+        if (userSessions.isEmpty()) {
+            return emptyUserGroupResponse(pageRequest);
+        }
+
+        List<Long> sessionIds = userSessions.stream()
+                .map(UserSession::getSessionId).collect(Collectors.toList());
+        LambdaQueryWrapper<Session> sessionWrapper = new LambdaQueryWrapper<>();
+        sessionWrapper.in(Session::getSessionId, sessionIds)
+                .eq(Session::getType, SessionTypeConstant.GROUP_TYPE)
+                .eq(Session::getStatus, SESSION_STATUS_NORMAL);
+        List<Session> groupSessions = sessionMapper.selectList(sessionWrapper);
+        if (groupSessions.isEmpty()) {
+            return emptyUserGroupResponse(pageRequest);
+        }
+
+        Set<Long> groupSessionIds = groupSessions.stream()
+                .map(Session::getSessionId).collect(Collectors.toSet());
+        Page<UserSession> page = pageRequest.toPage();
+        LambdaQueryWrapper<UserSession> pagedWrapper = new LambdaQueryWrapper<>();
+        pagedWrapper.eq(UserSession::getUserId, userId)
+                .in(UserSession::getSessionId, groupSessionIds)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL)
+                .orderByDesc(UserSession::getCreatedTime);
+        Page<UserSession> resultPage = userSessionMapper.selectPage(page, pagedWrapper);
+
+        List<Long> pagedSessionIds = resultPage.getRecords().stream()
+                .map(UserSession::getSessionId).collect(Collectors.toList());
+        Map<Long, Session> sessionMap = groupSessions.stream()
+                .filter(session -> pagedSessionIds.contains(session.getSessionId()))
+                .collect(Collectors.toMap(Session::getSessionId, session -> session));
+        Map<Long, Long> creatorMap = getCreatorMap(pagedSessionIds);
+        Map<Long, Integer> memberCountMap = getMemberCountMap(pagedSessionIds);
+
+        List<UserGroupDTO> groups = resultPage.getRecords().stream()
+                .map(userSession -> convertToUserGroupDTO(userSession,
+                        sessionMap.get(userSession.getSessionId()), creatorMap, memberCountMap))
+                .collect(Collectors.toList());
+        return PageResponse.<UserGroupDTO>builder()
+                .list(groups)
+                .total(resultPage.getTotal())
+                .pageSize(resultPage.getSize())
+                .pageNum(resultPage.getCurrent())
+                .pages(resultPage.getPages())
+                .hasNext(resultPage.getCurrent() < resultPage.getPages())
+                .hasPrevious(resultPage.getCurrent() > 1)
+                .build();
+    }
+
+    private PageResponse<UserGroupDTO> emptyUserGroupResponse(PageRequest pageRequest) {
+        return PageResponse.empty(pageRequest.getPageNum(), pageRequest.getPageSize());
+    }
+
+    private Map<Long, Long> getCreatorMap(List<Long> sessionIds) {
+        if (sessionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(UserSession::getSessionId, sessionIds)
+                .eq(UserSession::getRole, USER_ROLE_GROUP_OWNER)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL)
+                .select(UserSession::getSessionId, UserSession::getUserId);
+        return userSessionMapper.selectList(wrapper).stream().collect(Collectors.toMap(
+                UserSession::getSessionId, UserSession::getUserId, (existing, replacement) -> existing));
+    }
+
+    private Map<Long, Integer> getMemberCountMap(List<Long> sessionIds) {
+        if (sessionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return sessionIds.stream().collect(Collectors.toMap(sessionId -> sessionId,
+                this::countGroupMembers));
+    }
+
+    private Integer countGroupMembers(Long sessionId) {
+        LambdaQueryWrapper<UserSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserSession::getSessionId, sessionId)
+                .eq(UserSession::getStatus, SESSION_STATUS_NORMAL);
+        return Math.toIntExact(userSessionMapper.selectCount(wrapper));
+    }
+
+    private UserGroupDTO convertToUserGroupDTO(UserSession userSession, Session session,
+                                               Map<Long, Long> creatorMap,
+                                               Map<Long, Integer> memberCountMap) {
+        UserGroupDTO dto = new UserGroupDTO();
+        if (session != null) {
+            dto.setSessionId(String.valueOf(session.getSessionId()));
+            dto.setName(session.getName());
+            dto.setAvatar(session.getAvatar());
+        }
+        Long creatorId = creatorMap.get(userSession.getSessionId());
+        dto.setCreatorId(creatorId == null ? null : String.valueOf(creatorId));
+        dto.setRole(userSession.getRole());
+        dto.setMemberCount(memberCountMap.getOrDefault(userSession.getSessionId(), 0));
+        if (userSession.getCreatedTime() != null) {
+            dto.setCreatedTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                    .format(userSession.getCreatedTime()));
+        }
+        return dto;
     }
 
     private List<Long> validateInviteGroupParameters(Long sessionId, Long inviterId, List<Long> inviteeIds) {

@@ -5,6 +5,7 @@ import com.shanyangcode.userservice.model.dto.request.KickGroupMembersRequest;
 import com.shanyangcode.userservice.model.dto.request.GroupExitRequestDTO;
 import com.shanyangcode.userservice.model.dto.PageRequest;
 import com.shanyangcode.userservice.model.dto.GroupMemberDTO;
+import com.shanyangcode.userservice.model.dto.UserGroupDTO;
 import com.shanyangcode.userservice.model.vo.PageResponse;
 import com.shanyangcode.userservice.model.dto.response.InviteGroupResponse;
 import com.shanyangcode.userservice.model.dto.response.KickGroupMembersResponse;
@@ -23,4 +24,6 @@ public interface GroupService {
     boolean exitGroup(GroupExitRequestDTO request);
 
     PageResponse<GroupMemberDTO> getGroupMembers(Long sessionId, PageRequest pageRequest);
+
+    PageResponse<UserGroupDTO> getUserGroups(Long userId, PageRequest pageRequest);
 }
