@@ -1,6 +1,7 @@
 package com.shanyangcode.userservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.shanyangcode.common.model.vo.UserInfosResponse;
 import com.shanyangcode.userservice.model.dto.UpdateAvatarRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginCodeRequest;
 import com.shanyangcode.userservice.model.dto.UserLoginPasswordRequest;
@@ -10,6 +11,7 @@ import com.shanyangcode.userservice.model.vo.LoginAndRegisterResponse;
 import com.shanyangcode.userservice.model.vo.TokenResponse;
 import com.shanyangcode.userservice.model.vo.UploadUrlResponse;
 
+import java.util.List;
 import java.util.Map;
 
 
@@ -38,4 +40,6 @@ public interface UserService extends IService<User> {
     Boolean updateAvatar(UpdateAvatarRequest updateAvatarRequest);
 
     Map<Long,String> getUserNickName(Long sessionId);
+
+    Map<Long, UserInfosResponse> getUserInfos(List<Long> userIds);
 }

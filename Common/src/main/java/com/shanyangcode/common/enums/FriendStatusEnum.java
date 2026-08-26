@@ -1,16 +1,10 @@
-package com.shanyangcode.userservice.constant;
-/**
- * 好友状态枚举
- *
- * 数据库存储值说明：
- * - 0: 正常好友关系
- * - 1: 已拉黑
- * - 2: 已删除
- *
- */
+package com.shanyangcode.common.enums;
+
 public enum FriendStatusEnum {
+
     /**
      * 好友状态：非好友关系
+     * 特殊值，用于缓存标记"查询不到好友记录"的情况
      */
     NON_FRIEND(-1, "非好友"),
 
@@ -29,6 +23,7 @@ public enum FriendStatusEnum {
      */
     DELETED(2, "删除");
 
+
     private final int code;
     private final String description;
 
@@ -44,13 +39,7 @@ public enum FriendStatusEnum {
     public String getDescription() {
         return description;
     }
-    /**
-     * 根据状态码获取枚举值
-     *
-     * @param code 状态码
-     * @return 对应的枚举值
-     * @throws IllegalArgumentException 如果状态码无效
-     */
+
     public static FriendStatusEnum fromCode(int code) {
         for (FriendStatusEnum status : FriendStatusEnum.values()) {
             if (status.code == code) {
@@ -59,4 +48,6 @@ public enum FriendStatusEnum {
         }
         throw new IllegalArgumentException("无效的好友状态码: " + code);
     }
+
+
 }

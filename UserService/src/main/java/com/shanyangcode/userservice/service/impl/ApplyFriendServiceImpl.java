@@ -12,7 +12,7 @@ import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.userservice.constant.FriendApplicationStatusEnum;
-import com.shanyangcode.userservice.constant.FriendStatusEnum;
+import com.shanyangcode.common.enums.FriendStatusEnum;
 import com.shanyangcode.userservice.mapper.ApplyFriendMapper;
 import com.shanyangcode.userservice.model.dto.*;
 import com.shanyangcode.userservice.model.entity.ApplyFriend;

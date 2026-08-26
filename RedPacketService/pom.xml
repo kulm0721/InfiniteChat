@@ -34,6 +34,46 @@
 			<version>0.0.1-SNAPSHOT</version>
 			<scope>compile</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>net.javacrumbs.shedlock</groupId>
+			<artifactId>shedlock-spring</artifactId>
+			<version>4.42.0</version>
+		</dependency>
+
+		<dependency>
+			<groupId>net.javacrumbs.shedlock</groupId>
+			<artifactId>shedlock-provider-redis-spring</artifactId>
+			<version>4.42.0</version>
+		</dependency>
+
+		<!-- OpenFeign for inter-service communication -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+
+		<!-- Load balancer required by OpenFeign -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
+		</dependency>
+
+		<!-- Resilience4j for OpenFeign fallback support -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

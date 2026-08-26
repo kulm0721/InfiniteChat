@@ -7,7 +7,7 @@ import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.exception.BusinessException;
-import com.shanyangcode.userservice.constant.FriendStatusEnum;
+import com.shanyangcode.common.enums.FriendStatusEnum;
 import com.shanyangcode.userservice.mapper.FriendMapper;
 import com.shanyangcode.userservice.mapper.SessionMapper;
 import com.shanyangcode.userservice.mapper.UserSessionMapper;

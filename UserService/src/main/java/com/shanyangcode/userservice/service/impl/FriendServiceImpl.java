@@ -11,7 +11,7 @@ import com.shanyangcode.common.constant.SessionTypeConstant;
 import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.utils.SnowflakeUtil;
-import com.shanyangcode.userservice.constant.FriendStatusEnum;
+import com.shanyangcode.common.enums.FriendStatusEnum;
 import com.shanyangcode.userservice.constant.UserConstant;
 import com.shanyangcode.userservice.constant.UserStateEnum;
 import com.shanyangcode.userservice.mapper.ApplyFriendMapper;
@@ -655,6 +655,7 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
 
         // 3. 创建双向好友关系
         createFriendRelations(recipient.getUserId(), friendId);
+        evictFriendCache(recipient.getUserId(), friendId);
 
         // 4. 创建会话
         Long sessionId = createSession();
