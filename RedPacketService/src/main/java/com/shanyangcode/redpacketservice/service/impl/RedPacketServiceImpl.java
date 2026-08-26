@@ -1,35 +1,43 @@
 package com.shanyangcode.redpacketservice.service.impl;
 
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.KafkaTopicConstant;
 import com.shanyangcode.common.constant.MessageTypeConstant;
 import com.shanyangcode.common.constant.SessionTypeConstant;
+import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.dto.MessageRequest;
 import com.shanyangcode.common.utils.SnowflakeUtil;
 import com.shanyangcode.redpacketservice.constant.BalanceLogConstant;
+import com.shanyangcode.redpacketservice.constant.ReceiveResultConstant;
 import com.shanyangcode.redpacketservice.constant.RedPacketConstant;
 import com.shanyangcode.redpacketservice.constant.RedisKeyConstant;
 import com.shanyangcode.redpacketservice.annotation.PreventDuplicateSubmit;
 import com.shanyangcode.redpacketservice.config.KafkaConfig;
 import com.shanyangcode.redpacketservice.mapper.BalanceLogMapper;
 import com.shanyangcode.redpacketservice.mapper.RedPacketMapper;
+import com.shanyangcode.redpacketservice.mapper.RedPacketReceiveMapper;
 import com.shanyangcode.redpacketservice.mapper.UserBalanceMapper;
 import com.shanyangcode.redpacketservice.model.dto.RedPacketBody;
 import com.shanyangcode.redpacketservice.model.dto.RedPacketCreationEvent;
+import com.shanyangcode.redpacketservice.model.dto.RedPacketReceiveRequest;
 import com.shanyangcode.redpacketservice.model.dto.RedPacketSendRequest;
 import com.shanyangcode.redpacketservice.model.entity.BalanceLog;
 import com.shanyangcode.redpacketservice.model.entity.RedPacket;
+import com.shanyangcode.redpacketservice.model.entity.RedPacketReceive;
 import com.shanyangcode.redpacketservice.model.entity.UserBalance;
+import com.shanyangcode.redpacketservice.model.vo.ReceiveResultVO;
 import com.shanyangcode.redpacketservice.model.vo.RedPacketSendVO;
 import com.shanyangcode.redpacketservice.service.RedPacketService;
 import com.shanyangcode.redpacketservice.service.RedPacketValidationService;
 import com.shanyangcode.redpacketservice.util.RedPacketAlgorithm;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -38,10 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -64,13 +69,19 @@ public class RedPacketServiceImpl implements RedPacketService {
 
     private final DefaultRedisScript<Long> calculateRemainAmountScript;
 
+    private final DefaultRedisScript<List> receiveRedPacketScript;
+
+    private final RedPacketReceiveMapper redPacketReceiveMapper;
+
     public RedPacketServiceImpl(RedPacketMapper redPacketMapper,
                                 UserBalanceMapper userBalanceMapper,
                                 BalanceLogMapper balanceLogMapper,
                                 StringRedisTemplate stringRedisTemplate,
                                 KafkaTemplate<String, String> kafkaTemplate,
                                 RedPacketValidationService redPacketValidationService,
-                                DefaultRedisScript<Long> calculateRemainAmountScript) {
+                                DefaultRedisScript<Long> calculateRemainAmountScript,
+                                DefaultRedisScript<List> receiveRedPacketScript,
+                                RedPacketReceiveMapper redPacketReceiveMapper) {
         this.redPacketMapper = redPacketMapper;
         this.userBalanceMapper = userBalanceMapper;
         this.balanceLogMapper = balanceLogMapper;
@@ -78,6 +89,8 @@ public class RedPacketServiceImpl implements RedPacketService {
         this.kafkaTemplate = kafkaTemplate;
         this.redPacketValidationService = redPacketValidationService;
         this.calculateRemainAmountScript = calculateRemainAmountScript;
+        this.receiveRedPacketScript = receiveRedPacketScript;
+        this.redPacketReceiveMapper = redPacketReceiveMapper;
     }
 
     @Override
@@ -421,5 +434,173 @@ public class RedPacketServiceImpl implements RedPacketService {
                 .setSql("balance = balance + " + amount);
         int result = userBalanceMapper.update(null, wrapper);
         ThrowUtils.throwIf(result == 0, ErrorCode.OPERATION_ERROR, "用户余额更新失败");
+    }
+
+    @Override
+    public ReceiveResultVO receiveRedPacket(RedPacketReceiveRequest request) {
+        Long userId = request.getUserId();
+        Long redPacketId = request.getRedPacketId();
+
+        String poolKey = RedisKeyConstant.getPoolKey(redPacketId);
+        String recordsKey = RedisKeyConstant.getRecordsKey(redPacketId);
+
+        // 执行 Lua 脚本领取红包
+        List<String> keys = Arrays.asList(poolKey, recordsKey);
+
+        List result = stringRedisTemplate.execute(
+                receiveRedPacketScript,
+                keys,
+                String.valueOf(userId)
+        );
+
+        if (result == null || result.isEmpty()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "红包领取失败");
+        }
+
+        Object firstElement = result.get(0);
+        int resultCode = ((Number) firstElement).intValue();
+
+        ReceiveResultVO vo = new ReceiveResultVO();
+
+        // 处理不同的返回值
+        if (resultCode == ReceiveResultConstant.ALREADY_RECEIVED) {
+            // 已领取过
+            vo.setStatus(RedPacketConstant.STATUS_ALREADY_RECEIVED);
+            vo.setMessage("您已经领取过该红包了");
+            // 查询已领取的金额
+            Object amountObj = stringRedisTemplate.opsForHash().get(recordsKey, String.valueOf(userId));
+            if (amountObj != null) {
+                vo.setAmount(convertFenToYuan(Long.parseLong(amountObj.toString())));
+            }
+            return vo;
+
+        } else if (resultCode == ReceiveResultConstant.EMPTY_POOL) {
+            // Redis 数据为空，查询数据库获取真实状态
+            RedPacket redPacket = redPacketMapper.selectById(redPacketId);
+            if (redPacket == null) {
+                vo.setStatus(RedPacketConstant.STATUS_NOT_EXIST);
+                vo.setMessage("红包不存在");
+                return vo;
+            }
+
+            // 返回数据库中的真实状态
+            vo.setStatus(redPacket.getStatus());
+            if (redPacket.getStatus() == RedPacketConstant.STATUS_COMPLETED) {
+                vo.setMessage("红包已被领完");
+            } else if (redPacket.getStatus() == RedPacketConstant.STATUS_EXPIRED) {
+                vo.setMessage("红包已过期");
+            } else {
+                // 理论上不应该出现，Redis 为空但数据库状态为未领完
+                vo.setMessage("红包暂时无法领取");
+            }
+            return vo;
+        }
+
+        // 领取成功
+        long amount = ((Number) firstElement).longValue();
+        int completed = result.size() > 1 ? ((Number) result.get(1)).intValue() : ReceiveResultConstant.COMPLETION_FLAG_NOT_COMPLETED;
+
+        vo.setStatus(RedPacketConstant.STATUS_NOT_COMPLETED);
+        vo.setAmount(convertFenToYuan(amount));
+        vo.setMessage("恭喜您，领取成功");
+
+        // 发送领取记录到 Kafka
+        Map<String, Object> receiveEvent = new HashMap<>();
+        receiveEvent.put("userId", userId);
+        receiveEvent.put("redPacketId", redPacketId);
+        receiveEvent.put("receivedAmount", amount);
+        receiveEvent.put("receiveTime", System.currentTimeMillis());
+        sendKafkaAndWait(KafkaConfig.TOPIC_REDPACKET_RECEIVE, JSONUtil.toJsonStr(receiveEvent));
+
+        // 如果红包已领完，返回状态为已领取完，发送领完事件
+        if (ReceiveResultConstant.isCompleted(completed)) {
+            vo.setStatus(RedPacketConstant.STATUS_COMPLETED);
+            Map<String, Object> completedEvent = new HashMap<>();
+            completedEvent.put("redPacketId", redPacketId);
+            sendKafkaAndWait(KafkaConfig.TOPIC_REDPACKET_COMPLETED, JSONUtil.toJsonStr(completedEvent));
+        }
+
+        log.info("用户 {} 领取红包 {} 成功，金额: {}", userId, redPacketId, amount);
+
+        return vo;
+    }
+
+    /**
+     * 分转元
+     *
+     * @param amountFen 金额（分）
+     * @return 金额（元）
+     */
+    private BigDecimal convertFenToYuan(Long amountFen) {
+        if (amountFen == null) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(amountFen)
+                .divide(BigDecimal.valueOf(RedPacketConstant.YUAN_TO_FEN_MULTIPLIER), 2, RoundingMode.HALF_UP);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handleRedPacketReceive(Long userId, Long redPacketId, Long receivedAmount, Long receiveTime) {
+        // 幂等性检查：判断是否已经插入过
+        QueryWrapper<RedPacketReceive> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("red_packet_id", redPacketId);
+        queryWrapper.eq("receiver_id", userId);
+        Long count = redPacketReceiveMapper.selectCount(queryWrapper);
+
+        if (count > 0) {
+            log.warn("红包领取记录已存在，跳过处理。红包ID: {}, 用户ID: {}", redPacketId, userId);
+            return;
+        }
+
+        // 1. 插入领取记录
+        RedPacketReceive receive = new RedPacketReceive();
+        receive.setRedPacketReceiveId(SnowflakeUtil.nextId());
+        receive.setRedPacketId(redPacketId);
+        receive.setReceiverId(userId);
+        receive.setAmount(receivedAmount);
+        receive.setReceivedAt(new Date(receiveTime));
+        receive.setCreatedTime(new Date());
+        receive.setUpdatedTime(new Date());
+        try {
+            redPacketReceiveMapper.insert(receive);
+        } catch (DuplicateKeyException e) {
+            // 依赖 (red_packet_id, receiver_id) 唯一索引兜底并发重复消息
+            log.warn("红包领取记录已存在，跳过重复消息。红包ID: {}, 用户ID: {}", redPacketId, userId);
+            return;
+        }
+
+        // 2. 增加用户余额
+        addBalance(userId, receivedAmount);
+
+        // 3. 记录余额变动日志
+        recordBalanceLog(userId, receivedAmount, BalanceLogConstant.TYPE_RECEIVE, redPacketId);
+
+        log.info("红包领取记录处理完成。红包ID: {}, 用户ID: {}, 金额: {}", redPacketId, userId, receivedAmount);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handleRedPacketCompleted(Long redPacketId) {
+        // 1. 更新红包状态为已领取完
+        RedPacket redPacket = redPacketMapper.selectById(redPacketId);
+        if (redPacket == null) {
+            log.warn("红包不存在，红包ID: {}", redPacketId);
+            return;
+        }
+
+        redPacket.setStatus(RedPacketConstant.STATUS_COMPLETED);
+        redPacket.setUpdatedTime(new Date());
+        redPacketMapper.updateById(redPacket);
+
+        // 2. 清理 Redis 缓存
+        String poolKey = RedisKeyConstant.getPoolKey(redPacketId);
+        String recordsKey = RedisKeyConstant.getRecordsKey(redPacketId);
+
+        stringRedisTemplate.delete(poolKey);
+        stringRedisTemplate.delete(recordsKey);
+        stringRedisTemplate.opsForZSet().remove(RedisKeyConstant.EXPIRE_ZSET, String.valueOf(redPacketId));
+
+        log.info("红包已领取完，清理完成。红包ID: {}", redPacketId);
     }
 }

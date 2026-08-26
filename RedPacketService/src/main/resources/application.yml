@@ -48,7 +48,7 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       auto-offset-reset: latest
-      enable-auto-commit: true
+      enable-auto-commit: false
 
   cloud:
     nacos:

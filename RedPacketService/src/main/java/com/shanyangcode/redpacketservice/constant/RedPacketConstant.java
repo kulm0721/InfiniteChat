@@ -31,6 +31,11 @@ public final class RedPacketConstant {
     public static final int STATUS_EXPIRED = 2;
 
     /**
+     * 领取结果状态：当前用户已经领取过
+     */
+    public static final int STATUS_ALREADY_RECEIVED = 3;
+
+    /**
      * 红包状态：不存在数据库
      */
     public static final int STATUS_NOT_EXIST = -1;
