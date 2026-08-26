@@ -1,9 +1,12 @@
 package com.shanyangcode.redpacketservice.service.impl;
 
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.shanyangcode.common.common.BaseResponse;
 import com.shanyangcode.common.common.ErrorCode;
 import com.shanyangcode.common.constant.KafkaTopicConstant;
 import com.shanyangcode.common.constant.MessageTypeConstant;
@@ -12,7 +15,9 @@ import com.shanyangcode.common.exception.BusinessException;
 import com.shanyangcode.common.exception.ThrowUtils;
 import com.shanyangcode.common.model.dto.MessageBody;
 import com.shanyangcode.common.model.dto.MessageRequest;
+import com.shanyangcode.common.model.vo.UserInfosResponse;
 import com.shanyangcode.common.utils.SnowflakeUtil;
+import com.shanyangcode.redpacketservice.client.UserServiceClient;
 import com.shanyangcode.redpacketservice.constant.BalanceLogConstant;
 import com.shanyangcode.redpacketservice.constant.ReceiveResultConstant;
 import com.shanyangcode.redpacketservice.constant.RedPacketConstant;
@@ -31,12 +36,12 @@ import com.shanyangcode.redpacketservice.model.entity.BalanceLog;
 import com.shanyangcode.redpacketservice.model.entity.RedPacket;
 import com.shanyangcode.redpacketservice.model.entity.RedPacketReceive;
 import com.shanyangcode.redpacketservice.model.entity.UserBalance;
-import com.shanyangcode.redpacketservice.model.vo.ReceiveResultVO;
-import com.shanyangcode.redpacketservice.model.vo.RedPacketSendVO;
+import com.shanyangcode.redpacketservice.model.vo.*;
 import com.shanyangcode.redpacketservice.service.RedPacketService;
 import com.shanyangcode.redpacketservice.service.RedPacketValidationService;
 import com.shanyangcode.redpacketservice.util.RedPacketAlgorithm;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -73,6 +78,8 @@ public class RedPacketServiceImpl implements RedPacketService {
 
     private final RedPacketReceiveMapper redPacketReceiveMapper;
 
+    private final UserServiceClient userServiceClient;
+
     public RedPacketServiceImpl(RedPacketMapper redPacketMapper,
                                 UserBalanceMapper userBalanceMapper,
                                 BalanceLogMapper balanceLogMapper,
@@ -81,7 +88,8 @@ public class RedPacketServiceImpl implements RedPacketService {
                                 RedPacketValidationService redPacketValidationService,
                                 DefaultRedisScript<Long> calculateRemainAmountScript,
                                 DefaultRedisScript<List> receiveRedPacketScript,
-                                RedPacketReceiveMapper redPacketReceiveMapper) {
+                                RedPacketReceiveMapper redPacketReceiveMapper,
+                                UserServiceClient userServiceClient) {
         this.redPacketMapper = redPacketMapper;
         this.userBalanceMapper = userBalanceMapper;
         this.balanceLogMapper = balanceLogMapper;
@@ -91,6 +99,7 @@ public class RedPacketServiceImpl implements RedPacketService {
         this.calculateRemainAmountScript = calculateRemainAmountScript;
         this.receiveRedPacketScript = receiveRedPacketScript;
         this.redPacketReceiveMapper = redPacketReceiveMapper;
+        this.userServiceClient = userServiceClient;
     }
 
     @Override
@@ -602,5 +611,154 @@ public class RedPacketServiceImpl implements RedPacketService {
         stringRedisTemplate.opsForZSet().remove(RedisKeyConstant.EXPIRE_ZSET, String.valueOf(redPacketId));
 
         log.info("红包已领取完，清理完成。红包ID: {}", redPacketId);
+    }
+
+    @Override
+    public RedPacketDetailVO getRedPacketDetail(Long redPacketId, int pageNum, int pageSize) {
+        // 1. 查询红包基本信息
+        RedPacket redPacket = redPacketMapper.selectById(redPacketId);
+        ThrowUtils.throwIf(redPacket == null, ErrorCode.NOT_FOUND_ERROR, "红包不存在");
+
+        RedPacketDetailVO vo = new RedPacketDetailVO();
+        BeanUtils.copyProperties(redPacket, vo, "totalAmount");  // 排除 totalAmount，手动转换
+        // 分转元
+        vo.setTotalAmount(convertFenToYuan(redPacket.getTotalAmount()));
+
+        // 2. 从数据库分页查询领取记录
+        Page<RedPacketReceive> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<RedPacketReceive> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(RedPacketReceive::getRedPacketId, redPacketId)
+                .orderByDesc(RedPacketReceive::getReceivedAt) // 按领取时间倒序
+                .orderByAsc(RedPacketReceive::getReceiverId); // 再按领取人ID正序排序
+        Page<RedPacketReceive> result = redPacketReceiveMapper.selectPage(page, wrapper);
+
+        List<RedPacketReceive> receiveList = result.getRecords();
+
+        // 3. 统计信息
+        int receivedCount = (int) result.getTotal(); // 已领取的红包数量
+        long receivedAmountFen = sumAmountFromDB(redPacketId); //已领取的红包总金额
+
+        // 4. 批量获取用户信息（发送者 + 所有领取者）
+        Set<Long> userIds = new HashSet<>();
+        userIds.add(redPacket.getSenderId());
+        receiveList.forEach(r -> userIds.add(r.getReceiverId()));
+
+        Map<Long, UserInfosResponse> userInfoMap = batchGetUserInfos(userIds);
+
+        // 5. 填充发送者信息
+        UserInfosResponse senderInfo = userInfoMap.get(redPacket.getSenderId());
+        if (senderInfo != null) {
+            vo.setSenderNickname(senderInfo.getNickname());
+            vo.setSenderAvatar(senderInfo.getAvatar());
+        }
+
+        // 6. 将 RedPacketReceive 转换为 RedPacketReceiveVO，并填充领取者信息
+        List<RedPacketReceiveVO> receiveRecords = receiveList.stream() // 把领取记录集合转成 Stream，准备做一对一映射。
+                .map(receive -> { // 每条记录映射成一个新的 VO 对象：
+                    RedPacketReceiveVO receiveVO = new RedPacketReceiveVO();
+                    receiveVO.setReceiverId(receive.getReceiverId());
+                    // 分转元
+                    receiveVO.setAmount(convertFenToYuan(receive.getAmount()));
+                    receiveVO.setReceivedAt(receive.getReceivedAt());
+
+                    // 填充领取者用户信息
+                    UserInfosResponse receiverInfo = userInfoMap.get(receive.getReceiverId());
+                    if (receiverInfo != null) {
+                        receiveVO.setReceiverNickname(receiverInfo.getNickname());
+                        receiveVO.setReceiverAvatar(receiverInfo.getAvatar());
+                    }
+                    return receiveVO;
+                })
+                .collect(Collectors.toList());
+
+        vo.setReceiveRecords(receiveRecords);
+
+        // 7. 设置统计信息
+        vo.setReceivedCount(receivedCount);
+        vo.setReceivedAmount(convertFenToYuan(receivedAmountFen));
+
+        return vo;
+    }
+
+    /**
+     * 从数据库统计已领取总金额
+     *
+     * @param redPacketId 红包ID
+     * @return 已领取总金额（分）
+     */
+    private long sumAmountFromDB(Long redPacketId) {
+        LambdaQueryWrapper<RedPacketReceive> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(RedPacketReceive::getRedPacketId, redPacketId)
+                .select(RedPacketReceive::getAmount);
+        return redPacketReceiveMapper.selectList(wrapper).stream()
+                .mapToLong(RedPacketReceive::getAmount)
+                .sum();
+    }
+
+    /**
+     * 批量获取用户信息
+     *
+     * @param userIds 用户ID集合
+     * @return 用户ID到用户信息的映射
+     */
+    private Map<Long, UserInfosResponse> batchGetUserInfos(Set<Long> userIds) {
+        Map<Long, UserInfosResponse> userInfoMap = new HashMap<>();
+        try {
+            BaseResponse<Map<Long, UserInfosResponse>> response =
+                    userServiceClient.batchGetUserInfos(new ArrayList<>(userIds));
+
+            if (response != null && response.getCode() == 200 && response.getData() != null) {
+                // JSON 反序列化时 Map 的 Long key 会被解析为 String/Integer，需要手动转换
+                // 嵌套对象可能被解析为 LinkedHashMap，也需要处理
+                Map<?, ?> rawMap = response.getData();
+                for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                    Long key = Long.parseLong(entry.getKey().toString());
+                    Object value = entry.getValue();
+
+                    UserInfosResponse userInfo;
+                    if (value instanceof UserInfosResponse) {
+                        userInfo = (UserInfosResponse) value;
+                    } else if (value instanceof Map) {
+                        Map<?, ?> map = (Map<?, ?>) value;
+                        userInfo = new UserInfosResponse();
+                        userInfo.setUserId(map.get("userId") != null ? Long.parseLong(map.get("userId").toString()) : null);
+                        userInfo.setNickname(map.get("nickname") != null ? map.get("nickname").toString() : null);
+                        userInfo.setAvatar(map.get("avatar") != null ? map.get("avatar").toString() : null);
+                    } else {
+                        continue;
+                    }
+                    userInfoMap.put(key, userInfo);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("批量获取用户信息失败，用户ID列表={}，错误={}", userIds, e.getMessage());
+        }
+        return userInfoMap;
+    }
+
+    @Override
+    public RedPacketBasicVO getRedPacketBasicInfo(Long redPacketId) {
+        // 1. 查询红包基本信息
+        RedPacket redPacket = redPacketMapper.selectById(redPacketId);
+        ThrowUtils.throwIf(redPacket == null, ErrorCode.NOT_FOUND_ERROR, "红包不存在");
+
+        RedPacketBasicVO vo = new RedPacketBasicVO();
+        vo.setRedPacketId(redPacket.getRedPacketId());
+        vo.setRedPacketType(redPacket.getRedPacketType());
+        vo.setTotalAmount(convertFenToYuan(redPacket.getTotalAmount()));// 分转元
+        vo.setTotalCount(redPacket.getTotalCount());
+        vo.setStatus(redPacket.getStatus());
+        vo.setCreatedTime(redPacket.getCreatedTime());
+
+        // 2. 计算已领取统计信息
+        // 从数据库查询
+        Long receivedCount = redPacketReceiveMapper.selectCount(
+                Wrappers.<RedPacketReceive>lambdaQuery()
+                        .eq(RedPacketReceive::getRedPacketId, redPacketId)
+        );
+        vo.setReceivedCount(receivedCount.intValue());
+        long receivedAmountFen = sumAmountFromDB(redPacketId);
+        vo.setReceivedAmount(convertFenToYuan(receivedAmountFen));// 分转元
+        return vo;
     }
 }

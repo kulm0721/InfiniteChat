@@ -3,6 +3,8 @@ package com.shanyangcode.redpacketservice.service;
 import com.shanyangcode.redpacketservice.model.dto.RedPacketReceiveRequest;
 import com.shanyangcode.redpacketservice.model.dto.RedPacketSendRequest;
 import com.shanyangcode.redpacketservice.model.vo.ReceiveResultVO;
+import com.shanyangcode.redpacketservice.model.vo.RedPacketBasicVO;
+import com.shanyangcode.redpacketservice.model.vo.RedPacketDetailVO;
 import com.shanyangcode.redpacketservice.model.vo.RedPacketSendVO;
 
 public interface RedPacketService {
@@ -48,4 +50,24 @@ public interface RedPacketService {
      * @param redPacketId 红包 ID
      */
     void handleRedPacketCompleted(Long redPacketId);
+
+
+    /**
+     * 查询红包详情（分页）
+     *
+     * @param redPacketId 红包 ID
+     * @param pageNum     页码
+     * @param pageSize    每页大小
+     * @return 红包详情
+     */
+    RedPacketDetailVO getRedPacketDetail(Long redPacketId, int pageNum, int pageSize);
+
+
+    /**
+     * 查询红包基本信息（不含领取记录）
+     *
+     * @param redPacketId 红包 ID
+     * @return 红包基本信息
+     */
+    RedPacketBasicVO getRedPacketBasicInfo(Long redPacketId);
 }
