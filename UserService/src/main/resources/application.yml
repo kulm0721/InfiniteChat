@@ -4,14 +4,14 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/infinitechat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: [REDACTED]
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   data:
     redis:
       database: 2
       host: localhost
       port: 6379
-      password: [REDACTED]
+      password: ${REDIS_PASSWORD}
       timeout: 30000
       # 配置 redis 连接池
       lettuce:
@@ -27,8 +27,8 @@ spring:
   mail:
     host: smtp.qq.com
     port: 587
-    username: 1774606223@qq.com
-    password: [REDACTED]
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -38,11 +38,11 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: localhost:18375
+        server-addr: ${NACOS_SERVER_ADDR:localhost:18375}
 
   # Kafka 配置（UserService 目前无 Kafka 代码，此段为预留模板）
   kafka:
-    bootstrap-servers: localhost:19092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -68,8 +68,8 @@ mybatis-plus:
 
 minio:
   url: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
 
 server:
   port: 8104

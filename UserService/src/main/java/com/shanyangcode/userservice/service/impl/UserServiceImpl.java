@@ -34,6 +34,7 @@ import io.jsonwebtoken.Claims;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
@@ -68,6 +69,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     private UserSessionService userSessionService;
 
     @Resource
+    @Lazy
     private SessionService sessionService;
 
     @Override
@@ -304,7 +306,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return userInfosResponses;
     }
 }
-
 
 
 

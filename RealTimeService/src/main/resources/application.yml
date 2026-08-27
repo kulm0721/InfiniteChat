@@ -4,18 +4,18 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/infinitechat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: [REDACTED]
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   data:
     redis:
       database: 2
       host: localhost
       port: 6379
-      password: [REDACTED]
+      password: ${REDIS_PASSWORD}
       timeout: 30000
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -31,7 +31,7 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: localhost:18375
+        server-addr: ${NACOS_SERVER_ADDR:localhost:18375}
 
 server:
   port: 8102

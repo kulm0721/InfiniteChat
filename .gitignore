@@ -31,3 +31,13 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Local secrets and developer-specific settings
+.env
+.env.*
+!.env.example
+application-local.yml
+application-*.local.yml
+.claude/
+.codex-zk-prefs/
+*.class

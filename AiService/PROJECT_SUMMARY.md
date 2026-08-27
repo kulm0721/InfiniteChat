@@ -70,7 +70,7 @@ AiChat = AI 模型 (qwen-max)
 ## Docker 服务
 | 服务 | 容器名 | 端口 | 凭证 |
 |------|--------|------|------|
-| PgVector | pgvector | 54328:5432 | root / [REDACTED] |
+| PgVector | pgvector | 54328:5432 | 通过 `PGVECTOR_USERNAME` / `PGVECTOR_PASSWORD` 配置 |
 | Redis | (需确认) | 6379 | - |
 
 PgVector 数据库: `dp`, 表: `dp_embedding`, 数据目录: `C:\docker\pgvector\data`

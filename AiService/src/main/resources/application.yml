@@ -5,19 +5,19 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password: [REDACTED]
+      password: ${REDIS_PASSWORD}
       ttl: 3600
       timeout: 30000
   datasource:
       driver-class-name: com.mysql.cj.jdbc.Driver
-      url: jdbc:mysql://localhost:3306/infinitechat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-      username: root
-      password: [REDACTED]
+      url: ${DB_URL:jdbc:mysql://localhost:3306/infinitechat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+      username: ${DB_USERNAME}
+      password: ${DB_PASSWORD}
   mail:
     host: smtp.qq.com
     port: 587
-    username: 1774606223@qq.com
-    password: [REDACTED]
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -27,7 +27,7 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: localhost:18375
+        server-addr: ${NACOS_SERVER_ADDR:localhost:18375}
 
 
 server:
@@ -45,26 +45,26 @@ langchain4j:
     dashscope:
       chat-model:
         model-name: qwen-max
-        api-key: [REDACTED]
+        api-key: ${DASHSCOPE_API_KEY}
       streaming-chat-model:
         model-name: qwen-max
-        api-key: [REDACTED]
+        api-key: ${DASHSCOPE_API_KEY}
       embedding-model:
         model-name: qwen3.7-text-embedding
-        api-key: [REDACTED]
+        api-key: ${DASHSCOPE_API_KEY}
 
 bigmodel:
-  api-key: [REDACTED]
+  api-key: ${BIGMODEL_API_KEY}
 
 rag:
-  docs-path: src/main/resources/docs
+  docs-path: ${RAG_DOCS_PATH:src/main/resources/docs}
 
 pgvector:
   database: dp
   host: localhost
   port : 54328
-  user: root
-  password: [REDACTED]
+  user: ${PGVECTOR_USERNAME}
+  password: ${PGVECTOR_PASSWORD}
   table: dp_embedding
 
 management:
