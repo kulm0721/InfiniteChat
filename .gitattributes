@@ -3,3 +3,4 @@
 
 # Exclude the frontend from GitHub Linguist language statistics.
 frontend/** linguist-detectable=false
+AiService/src/main/resources/front/** linguist-detectable=false
