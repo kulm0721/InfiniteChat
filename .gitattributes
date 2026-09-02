@@ -1,2 +1,5 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+
+# Exclude the frontend from GitHub Linguist language statistics.
+frontend/** linguist-detectable=false
